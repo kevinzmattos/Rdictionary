@@ -1,0 +1,3469 @@
+---
+author: "Kevin Zavala Mattos"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+setwd("C:/Users/kevin/Documents/Kevin/R/Datacamp")
+library(stringr)
+```
+
+
+
+# Introduction to Modeling
+
+## Exploratory visualization of age
+
+Let's perform an exploratory data analysis (EDA) of the numerical explanatory variable age. You should always perform an exploratory analysis of your variables before any formal modeling. This will give you a sense of your variable's distributions, any outliers, and any patterns that might be useful when constructing your eventual model.
+
+```{r message=FALSE, warning=FALSE}
+# Load packages
+library(moderndive)
+library(ggplot2)
+
+# Plot the histogram
+ggplot(evals, aes(x = age)) +
+  geom_histogram(binwidth = 5) +
+  labs(x = "age", y = "count")
+```
+
+## Numerical summaries of age
+
+Let's continue our exploratory data analysis of the numerical explanatory variable age by computing summary statistics. Summary statistics take many values and summarize them with a single value. Let's compute three such values using dplyr data wrangling: mean (AKA the average), the median (the middle value), and the standard deviation (a measure of spread/variation).
+
+```{r message=FALSE, warning=FALSE}
+# Load packages
+library(moderndive)
+library(dplyr)
+
+# Compute summary stats
+evals %>%
+  summarize(mean_age = mean(age),
+            median_age = median(age),
+            sd_age = sd(age))
+```
+
+## Exploratory visualization of house size
+
+Let's create an exploratory visualization of the predictor variable reflecting the size of houses: sqft_living the square footage of living space where 1 sq.foot = 0.1 sq.meter.
+
+After plotting the histogram, what can you say about the distribution of the variable sqft_living?
+
+```{r message=FALSE, warning=FALSE}
+# Load packages
+library(moderndive)
+library(ggplot2)
+
+# Plot the histogram
+ggplot(house_prices, aes(x = sqft_living)) +
+  geom_histogram() +
+  labs(x="Size (sq.feet)", y= "count")
+```
+
+
+## Log10 transformation of house size
+
+You just saw that the predictor variable sqft_living is right-skewed and hence a log base 10 transformation is warranted to unskew it. Just as we transformed the outcome variable price to create log10_price in the video, let's do the same for sqft_living.
+
+```{r message=FALSE, warning=FALSE}
+# Load packages
+library(moderndive)
+library(dplyr)
+library(ggplot2)
+
+# Add log10_size
+house_prices_2 <- house_prices %>%
+  mutate(log10_size = log10(sqft_living))
+ 
+# Plot the histogram  
+ggplot(house_prices_2, aes(x = log10_size)) +
+  geom_histogram() +
+  labs(x = "log10 size", y = "count")
+```
+
+## EDA of relationship of teaching & "beauty" scores
+
+The researchers in the UT Austin created a "beauty score" by asking a panel of 6 students to rate the "beauty" of all 463 instructors. They were interested in studying any possible impact of "beauty" of teaching evaluation scores. Let's do an EDA of this variable and its relationship with teaching score.
+
+From now on, assume that ggplot2, dplyr, and moderndive are all available in your workspace unless you're told otherwise.
+
+```{r}
+# Plot the histogram
+ggplot(evals, aes(bty_avg)) +
+  geom_histogram(binwidth=0.5) +
+  labs(x = "Beauty score", y = "count")
+```
+
+```{r}
+# Scatterplot
+ggplot(evals, aes(x = bty_avg, y = score)) +
+  geom_point() +
+  labs(x = "beauty score", y = "teaching score")
+```
+
+```{r}
+# Jitter plot
+ggplot(evals, aes(x = bty_avg, y = score)) +
+  geom_jitter() +
+  labs(x = "beauty score", y = "teaching score")
+```
+
+## Correlation between teaching and "beauty" scores
+
+Let's numerically summarize the relationship between teaching score and beauty score bty_avg using the correlation coefficient. Based on this, what can you say about the relationship between these two variables?
+
+```{r}
+# Compute correlation
+evals %>%
+  summarize(correlation = cor(score, bty_avg))
+```
+
+## EDA of relationship of house price and waterfront
+
+Let's now perform an exploratory data analysis of the relationship between log10_price, the log base 10 house price, and the binary variable waterfront. Let's look at the raw values of waterfront and then visualize their relationship.
+
+The column log10_price has been added for you in the house_prices dataset.
+```{r}
+
+house_prices <- house_prices %>%
+  mutate(log10_price = log10(price))
+```
+
+
+```{r}
+# View the structure of log10_price and waterfront
+house_prices%>%
+  select(log10_price, waterfront) %>%
+  glimpse()
+
+# Plot 
+ggplot(house_prices, aes(x = waterfront, y = log10_price)) +
+  geom_boxplot() +
+  labs(x = "waterfront", y = "log10 price")
+```
+
+## Predicting house price with waterfront
+
+You just saw that houses with a view of the waterfront tend to be much more expensive. But by how much? Let's compute group means of log10_price, convert them back to dollar units, and compare!
+The variable log10_price has already been added to house_prices for you.
+
+```{r}
+# Calculate stats
+house_prices %>%
+  group_by(waterfront) %>%
+  summarize(mean_log10_price = mean(log10_price), n = n())
+```
+
+```{r}
+# Prediction of price for houses with view
+10^(6.12)
+
+# Prediction of price for houses without view
+10^(5.66)
+
+```
+
+# Modeling  with basic regression
+
+## Plotting a "best-fitting" regression line
+
+Previously you visualized the relationship of teaching score and "beauty score" via a scatterplot. Now let's add the "best-fitting" regression line to provide a sense of any overall trends. Even though you know this plot suffers from overplotting, you'll stick to the non-jitter version.
+
+
+```{r}
+# Load packages
+library(ggplot2)
+library(dplyr)
+library(moderndive)
+
+# Plot 
+ggplot(evals, aes(x = bty_avg, y = score)) +
+  geom_point() +
+  labs(x = "beauty score", y = "score") +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+## Fitting a regression with a numerical x
+
+Let's now explicity quantify the linear relationship between score and bty_avg using linear regression. You will do this by first "fitting" the model. Then you will get the regression table, a standard output in many statistical software packages. Finally, based on the output of get_regression_table(), which interpretation of the slope coefficient is correct?
+
+```{r}
+# Load package
+library(moderndive)
+
+# Fit model
+model_score_2 <- lm(score ~ bty_avg, data = evals)
+
+# Output regression table
+get_regression_table(model_score_2)
+```
+
+
+## Computing fitted/predicted values & residuals
+
+Now say you want to repeat this for all 463 instructors in evals. Doing this manually as you just did would be long and tedious, so as seen in the video, let's automate this using the get_regression_points() function.
+
+Furthemore, let's unpack its output.
+
+```{r}
+# Fit regression model
+model_score_2 <- lm(score ~ bty_avg, data = evals)
+
+# Get regression table
+get_regression_table(model_score_2)
+
+# Get all fitted/predicted values and residuals
+get_regression_points(model_score_2) %>%
+  mutate(score_hat_2= 3.88 + 0.067 * bty_avg)
+```
+
+```{r}
+# Fit regression model
+model_score_2 <- lm(score ~ bty_avg, data = evals)
+
+# Get regression table
+get_regression_table(model_score_2)
+
+# Get all fitted/predicted values and residuals
+get_regression_points(model_score_2) %>% 
+  mutate(residual_2 = score - score_hat)
+```
+
+## EDA of relationship of score and rank
+
+Let's perform an EDA of the relationship between an instructor's score and their rank in the evals dataset. You'll both visualize this relationship and compute summary statistics for each level of rank: teaching, tenure track, and tenured.
+
+```{r}
+ggplot(evals, aes(x= rank, y=score)) +
+  geom_boxplot() +
+  labs(x = "rank", y = "score")
+```
+
+```{r}
+evals %>%
+  group_by(rank) %>%
+  summarize(n = n(), mean_score = mean(score), sd_score = sd(score))
+```
+
+## Fitting a regression with a categorical x
+
+You'll now fit a regression model with the categorical variable rank as the explanatory variable and interpret the values in the resulting regression table. Note here the rank "teaching" is treated as the baseline for comparison group for the "tenure track" and "tenured" groups.
+
+```{r}
+# Fit regression model
+model_score_4 <- lm(score ~ rank, data = evals)
+
+# Get regression table
+get_regression_table(model_score_4)
+
+# teaching mean
+teaching_mean <- 4.28
+
+# tenure track mean
+tenure_track_mean <- 4.28 - 0.13
+
+# tenured mean
+tenured_mean <- 4.28 - 0.145
+```
+
+Kudos! Remember that regressions with a categorical variable return group means expressed relative to a baseline for comparison! 
+
+## Visualizing the distribution of residuals
+
+Let's now compute both the predicted score y^
+and the residual y−y^ for all n=463
+
+instructors in the evals dataset. Furthermore, you'll plot a histogram of the residuals and see if there are any patterns to the residuals, i.e. your predictive errors.
+
+model_score_4 from the previous exercise is available in your workspace.
+
+```{r message=FALSE, warning=FALSE}
+# Calculate predictions and residuals
+model_score_4_points <- get_regression_points(model_score_4)
+model_score_4_points
+
+# Plot residuals
+ggplot(model_score_4_points, aes(x=residual)) +
+  geom_histogram() +
+  labs(x = "residuals", title = "Residuals from score ~ rank model")
+```
+
+Congrats! Look at the distribution of the residuals. While it seems there are fewer negative residuals corresponding to overpredictions of score, the magnitude of the error seems to be larger (ranging all the way to -2). 
+
+
+# Modeling with Multiple Regression
+
+## EDA of relationship
+
+Unfortunately, making 3D scatterplots to perform an EDA is beyond the scope of this course. So instead let's focus on making standard 2D scatterplots of the relationship between price and the number of bedrooms, keeping an eye out for outliers.
+
+The log10 transformations have been made for you and are saved in house_prices.
+
+```{r}
+house_prices <- moderndive::house_prices %>%
+  mutate(
+      log10_price = log10(price),
+      log10_size = log10(sqft_living)
+  )
+  
+```
+
+
+```{r}
+# Create scatterplot with regression line
+ggplot(house_prices, aes(bedrooms, y = log10_price)) +
+  geom_point() +
+  labs(x = "Number of bedrooms", y = "log10 price") +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+
+```{r}
+# Remove outlier
+house_prices_transform <- house_prices %>%
+  filter(bedrooms != 33)
+
+# Create scatterplot with regression line
+ggplot(house_prices_transform, aes(x = bedrooms, y = log10_price)) +
+  geom_point() +
+  labs(x = "Number of bedrooms", y = "log10 price") +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+*Excellent! Another important reason to perform EDA is to discard any potential outliers that are likely data entry errors. In our case, after removing an outlier, you can see a clear positive relationship between the number of bedrooms and price, as one would expect. *
+
+## Fitting a regression
+
+house_prices, which is available in your environment, has the log base 10 transformed variables included and the outlier house with 33 bedrooms removed. Let's fit a multiple regression model of price as a function of size and the number of bedrooms and generate the regression table. In this exercise, you will first fit the model, and based on the regression table, in the second part, you will answer the following question:
+
+Which of these interpretations of the slope coefficent for bedrooms is correct?
+
+```{r}
+# Fit model
+model_price_2 <- lm(log10_price ~ log10_size + bedrooms, 
+                    data = house_prices)
+
+# Get regression table
+moderndive::get_regression_table(model_price_2)
+```
+
+*Splendid! In this multiple regression setting, the associated effect of any variable must be viewed in light of the other variables in the model. In our case, accounting for the size of the house reverses the relationship of the number of bedrooms and price from positive to negative!*
+
+
+## Making predictions using size and bedrooms
+
+Say you want to predict the price of a house using this model and you know it has:
+
+    1000 square feet of living space, and
+    3 bedrooms
+
+What is your prediction both in log10 dollars and then dollars?
+
+The regression model from the previous exercise is available in your workspace as model_price_2. 
+
+
+```{r}
+# Make prediction in log10 dollars
+2.69 + 0.941 * log10(1000) - 0.033 * 3
+
+# Make prediction dollars
+10^(5.414)
+```
+
+## Interpreting residuals
+
+Let's automate this process for all 21K rows in house_prices to obtain residuals, which you'll use to compute the sum of squared residuals: a measure of the lack of fit of a model. After computing the sum of squared residuals, you will answer the following question:
+
+Which of these statements about residuals is incorrect?
+
+
+## Parallel slopes model
+
+Let's now fit a "parallel slopes" model with the numerical explanatory/predictor variable log10_size and the categorical, in this case binary, variable waterfront. The visualization corresponding to this model is below:
+
+```{r}
+# Fit model
+model_price_4 <- lm(log10_price ~ log10_size + waterfront, 
+                    data = house_prices)
+
+# Get regression table
+moderndive::get_regression_table(model_price_4)
+```
+
+## Interpreting the parallel slopes model
+
+Let's interpret the values in the regression table for the parallel slopes model you just fit. Run get_regression_table(model_price_4) in the console to view the regression table again. The visualization for this model is below. Which of these interpretations is incorrect?
+
+*Right! 0.322 is the offset in the intercept for houses with a view of the waterfront relative to those which don't.*
+
+
+## Making predictions using size and waterfront
+
+Using your model for log10_price as a function of log10_size and the binary variable waterfront, let's make some predictions! Say you have the two following "new" houses, what would you predict their prices to be in dollars?
+
+    House A: log10_size = 2.9 that has a view of the waterfront
+    House B: log10_size = 3.1 that does not have a view of the waterfront
+
+We make the corresponding visual predictions below:
+
+```{r}
+new_houses <- data.frame(
+  log10_price  = c(2.9,3.6),
+  condition = factor(c(3,4))
+)
+new_houses
+```
+
+
+```{r}
+# Get regression table
+moderndive::get_regression_table(model_price_4)
+
+# Prediction for House A
+10^(2.96+0.322+ 0.825*2.9)
+
+# Prediction for House B
+10^(2.96+0.825*3.1)
+```
+
+## Automating predictions on "new" houses
+
+Let's now repeat what you did in the last exercise, but in an automated fashion assuming the information on these "new" houses is saved in a dataframe.
+
+Your model for log10_price as a function of log10_size and the binary variable waterfront (model_price_4) is available in your workspace, and so is new_houses_2, a dataframe with data on 2 new houses. While not so beneficial with only 2 "new" houses, this will save a lot of work if you had 2000 "new" houses.
+
+
+```{r}
+new_houses2 <- data.frame(
+  log10_size = c(2.9,3.1),
+  waterfront = c(TRUE, FALSE)
+)
+```
+
+
+```{r echo=TRUE}
+moderndive::get_regression_points(model_price_4, newdata = new_houses2)
+```
+
+```{r}
+# Get predictions price_hat in dollars on "new" houses
+moderndive::get_regression_points(model_price_4, newdata = new_houses2) %>% 
+  mutate(price_hat = 10^log10_price_hat)
+```
+
+
+
+
+## Refresher: sum of squared residuals
+
+Let's remind you how to compute the sum of squared residuals. You'll do this for two models.
+
+```{r}
+# Model 2
+model_price_2 <- lm(log10_price ~ log10_size + bedrooms, 
+                    data = house_prices)
+
+# Calculate squared residuals
+model_price_2 %>%
+moderndive::get_regression_points() %>%
+mutate ( sq_residuals = residual^2) %>%
+summarize(sum_sq_residuals = sum(sq_residuals))
+```
+
+
+
+```{r}
+# Model 4
+model_price_4 <- lm(log10_price ~ log10_size + waterfront, 
+                    data = house_prices)
+
+# Calculate squared residuals
+moderndive::get_regression_points(model_price_4) %>%
+  mutate(sq_residuals = residual^2) %>%
+  summarize(sum_sq_residuals = sum(sq_residuals))
+```
+
+
+
+
+## Computing the R-squared of a model
+
+Let's compute the R2
+
+summary value for the two numerical explanatory/predictor variable model you fit in the Chapter 3, price as a function of size and the number of bedrooms.
+
+Recall that R2
+can be calculated as: 
+
+$$1- \cfrac{Var(residuals)}{Var(y)}$$
+
+```{r}
+# Fit model
+model_price_2 <- lm(log10_price ~ log10_size + bedrooms,
+                    data = house_prices)
+                    
+# Get fitted/values & residuals, compute R^2 using residuals
+moderndive::get_regression_points(model_price_2) %>%
+  summarize(r_squared = 1 - var(residual) / var(log10_price))
+```
+  
+  
+  ## Computing the MSE & RMSE of a model
+
+Just as you did earlier with $R^2$
+
+, which is a measure of model fit, let's now compute the root mean square error (RMSE) of our models, which is a commonly used measure of preditive error. Let's use the model of price as a function of size and number of bedrooms.
+
+The model is available in your workspace as model_price_2.
+
+```{r}
+# Get all residuals, square them, take the mean and square root
+moderndive::get_regression_points(model_price_2) %>%
+  mutate(sq_residuals = residual^2) %>%
+  summarize(mse = mean(sq_residuals)) %>% 
+  mutate(rmse = sqrt(mse))
+```
+
+*Woo hoo! The RMSE is 0.167. You can think of this as the “typical” prediction error this model makes. *
+
+
+## Fitting model to training data
+
+It's time to split your data into a training set to fit a model and a separate test set to evaluate the predictive power of the model. Before making this split however, we first sample 100% of the rows of house_prices without replacement and assign this to house_prices_shuffled. This has the effect of "shuffling" the rows, thereby ensuring that the training and test sets are randomly sampled.
+
+```{r}
+# Set random number generator seed value for reproducibility
+set.seed(76)
+
+# Randomly reorder the rows
+house_prices_shuffled <- house_prices %>% 
+  sample_frac(size = 1, replace = FALSE)
+```
+
+
+```{r}
+# Train/test split
+train <- house_prices_shuffled %>%
+  slice(1:10000)
+test <- house_prices_shuffled %>%
+  slice(10001:21613)
+
+# Fit model to training set
+train_model_2 <- lm(log10_price ~ log10_size + bedrooms, 
+                      data= train)
+```
+
+## Predicting on test data
+
+Now that you've trained the model on the train set, let's apply the model to the test data, make predictions, and evaluate the predictions. Recall that having a separate test set here simulates the gathering of a "new" independent dataset to test our model's predictive performance on.
+
+The datasets train and test, and the trained model, train_model_2 are available in your workspace.
+
+
+```{r}
+# Make predictions on test set
+get_regression_points(train_model_2, newdata = test)
+
+# Compute RMSE
+get_regression_points(train_model_2, newdata = test) %>% 
+  mutate(sq_residuals = residual^2) %>%
+  summarize(rmse = sqrt(mean(sq_residuals)))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Specifying dates
+
+As you saw in the video, R doesn't know something is a date unless you tell it. If you have a character string that represents a date in the ISO 8601 standard you can turn it into a Date using the as.Date() function. Just pass the character string (or a vector of character strings) as the first argument.
+
+In this exercise you'll convert a character string representation of a date to a Date object.
+
+```{r}
+# The date R 3.0.0 was released
+x <- "2013-04-03"
+
+# Examine structure of x
+str(x)
+
+# Use as.Date() to interpret x as a date
+x_date <- as.Date(x)
+
+# Examine structure of x_date
+str(x_date)
+
+# Store April 10 2014 as a Date
+april_10_2014 <- as.Date("2014-04-10")
+```
+
+## Automatic import
+
+Sometimes you'll need to input a couple of dates by hand using as.Date() but it's much more common to have a column of dates in a data file.
+
+Some functions that read in data will automatically recognize and parse dates in a variety of formats. In particular the import functions, like read_csv(), in the readr package will recognize dates in a few common formats.
+
+There is also the anytime() function in the anytime package whose sole goal is to automatically parse strings as dates regardless of the format.
+
+Try them both out in this exercise.
+
+```{r eval=FALSE}
+# Load the readr package
+library(readr)
+library(rversions)
+# Use read_csv() to import rversions.csv
+releases <- rversions::r_versions()
+
+# Examine the structure of the date column
+str(releases$date)
+
+# Load the anytime package
+library(anytime)
+
+# Various ways of writing Sep 10 2009
+sep_10_2009 <- c("September 10 2009", "2009-09-10", "10 Sep 2009", "09-10-2009")
+
+# Use anytime() to parse sep_10_2009
+anytime(sep_10_2009)
+```
+
+## Plotting
+
+If you plot a Date on the axis of a plot, you expect the dates to be in calendar order, and that's exactly what happens with plot() or ggplot().
+
+In this exercise you'll make some plots with the R version releases data from the previous exercises using ggplot2. There are two big differences when a Date is on an axis:
+
+    If you specify limits they must be Date objects.
+
+    To control the behavior of the scale you use the scale_x_date() function.
+
+Have a go in this exercise where you explore how often R releases occur.
+
+```{r eval=FALSE  }
+library(ggplot2)
+
+# Set the x axis to the date column
+ggplot(releases, aes(x = date, y = type)) +
+  geom_line(aes(group = 1, color = factor(major)))
+
+# Limit the axis to between 2010-01-01 and 2014-01-01
+ggplot(releases, aes(x = date, y = type)) +
+  geom_line(aes(group = 1, color = factor(major))) +
+  xlim(as.Date("2010-01-01"), as.Date("2014-01-01"))
+
+# Specify breaks every ten years and labels with "%Y"
+ggplot(releases, aes(x = date, y = type)) +
+  geom_line(aes(group = 1, color = factor(major))) +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y")
+```
+
+
+## Arithmetic and logical operators
+
+Since Date objects are internally represented as the number of days since 1970-01-01 you can do basic math and comparisons with dates. You can compare dates with the usual logical operators (<, ==, > etc.), find extremes with min() and max(), and even subtract two dates to find out the time between them.
+
+In this exercise you'll see how these operations work by exploring the last R release. You'll see Sys.date() in the code, it simply returns today's date.
+
+```{r eval=FALSE,veal=FALSE}
+# Find the largest date
+last_release_date <- max(releases$date)
+
+# Filter row for last release
+last_release <- filter(releases, date == last_release_date)
+
+# Print last_release
+last_release
+
+# How long since last release?
+Sys.Date() - last_release_date
+```
+
+## Getting datetimes into R
+
+Just like dates without times, if you want R to recognize a string as a datetime you need to convert it, although now you use as.POSIXct(). as.POSIXct() expects strings to be in the format YYYY-MM-DD HH:MM:SS.
+
+The only tricky thing is that times will be interpreted in local time based on your machine's set up. You can check your timezone with Sys.timezone(). If you want the time to be interpreted in a different timezone, you just set the tz argument of as.POSIXct(). You'll learn more about time zones in Chapter 4.
+
+In this exercise you'll input a couple of datetimes by hand and then see that read_csv() also handles datetimes automatically in a lot of cases.
+
+```{r eval=FALSE}
+# Use as.POSIXct to enter the datetime 
+as.POSIXct("2010-10-01 12:12:00")
+
+# Use as.POSIXct again but set the timezone to `"America/Los_Angeles"`
+as.POSIXct("2010-10-01 12:12:00", tz = "America/Los_Angeles")
+
+# Use read_csv to import rversions.csv
+releases <- read_csv("rversions.csv")
+
+# Examine structure of datetime column
+str(releases$datetime)
+```
+
+## Datetimes behave nicely too
+
+Just like Date objects, you can plot and do math with POSIXct objects.
+
+As an example, in this exercise you'll see how quickly people download new versions of R, by examining the download logs from the RStudio CRAN mirror.
+
+R 3.2.0 was released at "2015-04-16 07:13:33" so cran-logs_2015-04-17.csv contains a random sample of downloads on the 16th, 17th and 18th.
+
+```{r eval=FALSE}
+# Import "cran-logs_2015-04-17.csv" with read_csv()
+logs <- read_csv("cran-logs_2015-04-17.csv")
+
+# Print logs
+print(logs)
+
+# Store the release time as a POSIXct object
+release_time <- as.POSIXct ("2015-04-16 07:13:33", tz = "UTC")
+
+# When is the first download of 3.2.0?
+logs %>% 
+  filter(datetime == release_time,
+    r_version == "3.2.0")
+
+# Examine histograms of downloads by version
+ggplot(logs, aes(x = datetime)) +
+  geom_histogram() +
+  geom_vline(aes(xintercept = as.numeric(release_time)))+
+  facet_wrap(~ r_version, ncol = 1)
+```
+
+## Updating aesthetic labels
+
+In this exercise, you'll modify some aesthetics to make a bar plot of the number of cylinders for cars with different types of transmission.
+
+You'll also make use of some functions for improving the appearance of the plot.
+
+    labs() to set the x- and y-axis labels. It takes strings for each argument.
+    scale_color_manual() defines properties of the color scale (i.e. axis). The first argument sets the legend title. values is a named vector of colors to use.
+
+```{r}
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  geom_bar() +
+  labs(x = "Number of Cylinders", y = "Count")
+```
+
+```{r}
+palette <- c(automatic = "#377EB8", manual = "#E41A1C")
+
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  geom_bar() +
+  labs(x = "Number of Cylinders", y = "Count") +
+  scale_fill_manual(values =  palette)
+```
+```{r}
+palette <- c(automatic = "#377EB8", manual = "#E41A1C")
+
+ggplot(mtcars, aes(factor(cyl),fill = factor(am))) +
+  geom_bar(position = "dodge") +
+  labs(x = "Number of Cylinders", y = "Count")
+```
+
+## Setting a dummy aesthetic
+
+In the last chapter you saw that all the visible aesthetics can serve as attributes and aesthetics, but I very conveniently left out x and y. That's because although you can make univariate plots (such as histograms, which you'll get to in the next chapter), a y-axis will always be provided, even if you didn't ask for it.
+
+You can make univariate plots in ggplot2, but you will need to add a fake y axis by mapping y to zero.
+
+When using setting y-axis limits, you can specify the limits as separate arguments, or as a single numeric vector. That is, ylim(lo, hi) or ylim(c(lo, hi)).
+
+```{r}
+ggplot(mtcars, aes(mpg, 0)) +
+  geom_jitter() +
+  # Set the y-axis limits
+  ylim(-2,2)
+```
+
+## Overplotting 3: Low-precision data
+
+You already saw how to deal with overplotting when using geom_point() in two cases:
+
+    Large datasets
+    Aligned values on a single axis
+
+We used position = 'jitter' inside geom_point() or geom_jitter().
+
+Let's take a look at another case:
+
+    Low-precision data
+
+This results from low-resolution measurements like in the iris dataset, which is measured to 1mm precision (see viewer). It's similar to case 2, but in this case we can jitter on both the x and y axis.
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width, color = Species)) +
+  # Swap for jitter layer with width 0.1
+  geom_jitter(alpha = 0.5, width=0.1)
+```
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width, color = Species)) +
+  # Set the position to jitter
+geom_point(position= "jitter", alpha = 0.5)
+```
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width, color = Species)) +
+  # Use a jitter position function with width 0.1
+  geom_point(position = position_jitter(width=0.1),alpha = 0.5)
+```
+
+## Overplotting 4: Integer data
+
+Let's take a look at the last case of dealing with overplotting:
+
+    Integer data
+
+This can be type integer (i.e. 1 ,2, 3...) or categorical (i.e. class factor) variables. factor is just a special class of type integer.
+
+You'll typically have a small, defined number of intersections between two variables, which is similar to case 3, but you may miss it if you don't realize that integer and factor data are the same as low precision data.
+
+The Vocab dataset provided contains the years of education and vocabulary test scores from respondents to US General Social Surveys from 1972-2004.
+
+```{r}
+library(car)
+
+# Examine the structure of Vocab
+str(Vocab)
+
+# Plot vocabulary vs. education
+ggplot(Vocab, aes(education, vocabulary)) +
+  # Add a point layer
+  geom_point()
+```
+
+```{r}
+ggplot(Vocab, aes(education, vocabulary)) +
+  # Change to a jitter layer
+  geom_jitter()
+```
+
+
+```{r}
+ggplot(Vocab, aes(education, vocabulary)) +
+  # Set the transparency to 0.2
+  geom_jitter(alpha = 0.2)
+```
+
+```{r}
+ggplot(Vocab, aes(education, vocabulary)) +
+  # Set the shape to 1
+  geom_jitter(alpha = 0.2, shape = 1)
+```
+
+## Positions in histograms
+
+Here, we'll examine the various ways of applying positions to histograms. geom_histogram(), a special case of geom_bar(), has a position argument that can take on the following values:
+
+    stack (the default): Bars for different groups are stacked on top of each other.
+    dodge: Bars for different groups are placed side by side.
+    fill: Bars for different groups are shown as proportions.
+    identity: Plot the values as they appear in the dataset.
+```{r}
+ggplot(mtcars, aes(mpg, fill = factor(am))) +
+  # Change the position to dodge
+  geom_histogram(binwidth = 1)
+```
+
+```{r}
+ggplot(mtcars, aes(mpg, fill = factor(am))) +
+  # Change the position to dodge
+  geom_histogram(position= "dodge",binwidth = 1)
+```
+
+```{r}
+ggplot(mtcars, aes(mpg, fill = factor(am))) +
+  # Change the position to fill
+  geom_histogram(binwidth = 1, position = "fill")
+```
+
+```{r}
+ggplot(mtcars, aes(mpg, fill = factor(am))) +
+  # Change the position to identity, with transparency 0.4
+  geom_histogram(binwidth = 1, position = "identity", alpha=0.4)
+```
+
+## Position in bar and col plots
+
+Let's see how the position argument changes geom_bar().
+
+We have three position options:
+
+    stack: The default
+    dodge: Preferred
+    fill: To show proportions
+
+While we will be using geom_bar() here, note that the function geom_col() is just geom_bar() where both the position and stat arguments are set to "identity". It is used when we want the heights of the bars to represent the exact values in the data.
+
+In this exercise, you'll draw the total count of cars having a given number of cylinders (fcyl), according to manual or automatic transmission type (fam).
+
+```{r}
+# Plot fcyl, filled by fam
+ggplot(mtcars,aes(x=factor(cyl), fill=factor(am))) +
+  # Add a bar layer
+  geom_bar()
+
+```
+
+```{r}
+# Plot fcyl, filled by fam
+ggplot(mtcars,aes(x=factor(cyl), fill=factor(am))) +
+  # Add a bar layer
+  geom_bar(position ='fill')
+```
+
+```{r}
+# Plot fcyl, filled by fam
+ggplot(mtcars,aes(x=factor(cyl), fill=factor(am))) +
+  # Add a bar layer
+  geom_bar(position = 'dodge')
+```
+
+## Overlapping bar plots
+
+You can customize bar plots further by adjusting the dodging so that your bars partially overlap each other. Instead of using position = "dodge", you're going to use position_dodge(), like you did with position_jitter() in the the previous exercises. Here, you'll save this as an object, posn_d, so that you can easily reuse it.
+
+Remember, the reason you want to use position_dodge() (and position_jitter()) is to specify how much dodging (or jittering) you want.
+
+For this example, you'll use the mtcars dataset.
+
+
+```{r}
+# Plot fcyl, filled by fam
+ggplot(mtcars,aes(x=factor(cyl), fill=factor(am))) +
+  # Add a bar layer
+  geom_bar(position = position_dodge(width=0.2))
+```
+
+
+```{r}
+# Plot fcyl, filled by fam
+ggplot(mtcars,aes(x=factor(cyl), fill=factor(am))) +
+  # Add a bar layer
+  geom_bar(position = position_dodge(width=0.2), alpha = 0.6)
+```
+
+
+## Bar plots: sequential color palette
+
+In this bar plot, we'll fill each segment according to an ordinal variable. The best way to do that is with a sequential color palette.
+
+Here's an example of using a sequential color palette with the mtcars dataset:
+
+```{r}
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  geom_bar() +
+  scale_fill_brewer(palette = "Set1")
+
+```
+
+In the exercise, you'll use similar code on the the Vocab dataset. Both datasets are ordinal.
+
+```{r}
+library(car)
+Vocab <- carData::Vocab
+ print(head(Vocab))
+
+
+```
+
+```{r}
+# Plot education, filled by vocabulary
+ggplot(Vocab,aes(x=education, fill = factor(vocabulary)))+
+
+geom_bar()
+```
+
+```{r}
+# Plot education, filled by vocabulary
+ggplot(Vocab, aes(education, fill = factor(vocabulary))) +
+  # Add a bar layer with position "fill"
+  geom_bar(position='fill')
+```
+
+
+```{r}
+# Plot education, filled by vocabulary
+ggplot(Vocab, aes(education, fill = factor(vocabulary))) +
+  # Add a bar layer with position "fill"
+  geom_bar(position = "fill") +
+  # Add a brewer fill scale with default palette
+  scale_fill_brewer()
+```
+
+
+```{r}
+recess <-load("C:/Users/kevin/Documents/Kevin/R/DataCamp/recess.RData")
+
+
+# Change the y-axis to the proportion of the population that is unemployed
+ggplot(economics, aes(date, unemploy/pop)) +
+  geom_line()
+```
+```{r}
+load("C:/Users/kevin/Documents/Kevin/R/DataCamp/fish.RData")
+# Plot the Rainbow Salmon time series
+ggplot(fish.species, aes(x = Year, y = Rainbow)) +
+  geom_line()
+
+# Plot the Pink Salmon time series
+ggplot(fish.species, aes(x = Year, y = Pink)) +
+  geom_line()
+
+# Plot multiple time-series by grouping by species
+ggplot(fish.tidy, aes(Year, Capture)) +
+  geom_line(aes(group = Species))
+
+# Plot multiple time-series by coloring by species
+ggplot(fish.tidy, aes(x = Year, y = Capture, color = Species)) +
+  geom_line()
+```
+
+## Moving the legend
+
+Let's wrap up this course by making a publication-ready plot communicating a clear message.
+
+To change stylistic elements of a plot, call theme() and set plot properties to a new value. For example, the following changes the legend position.
+
+p + theme(legend.position = new_value)
+
+Here, the new value can be
+
+    "top", "bottom", "left", or "right'": place it at that side of the plot.
+    "none": don't draw it.
+    c(x, y): c(0, 0) means the bottom-left and c(1, 1) means the top-right.
+
+Let's revisit the recession period line plot (assigned to plt_prop_unemployed_over_time).
+
+
+```{r}
+# Position the legend inside the plot at (0.6, 0.1)
+plt_prop_unemployed_over_time +
+  theme(legend.position = c(0.6, 0.1))
+```
+
+
+## Modifying theme elements
+
+Many plot elements have multiple properties that can be set. For example, line elements in the plot such as axes and gridlines have a color, a thickness (size), and a line type (solid line, dashed, or dotted). To set the style of a line, you use element_line(). For example, to make the axis lines into red, dashed lines, you would use the following.
+
+```{r}
+plt_prop_unemployed_over_time +
+  theme(
+    # For all rectangles, set the fill color to grey92
+    rect = element_rect(fill = "grey92"),
+    # For the legend key, turn off the outline
+    legend.key = element_rect(color= NA)
+  )
+```
+
+```{r}
+plt_prop_unemployed_over_time +
+  theme(
+    rect = element_rect(fill = "grey92"),
+    legend.key = element_rect(color = NA),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.grid.major.y = element_line(
+      color = "white",
+      size = 0.5,
+      linetype = "dotted"
+    ),
+    # Set the axis text color to grey25
+    axis.text = element_text(color = 'grey25'),
+    # Set the plot title font face to italic and font size to 16
+   plot.title = element_text(size=16, face = 'italic')
+  )
+```
+
+
+## Modifying whitespace
+
+Whitespace means all the non-visible margins and spacing in the plot.
+
+To set a single whitespace value, use unit(x, unit), where x is the amount and unit is the unit of measure.
+
+Borders require you to set 4 positions, so use margin(top, right, bottom, left, unit). To remember the margin order, think TRouBLe.
+
+The default unit is "pt" (points), which scales well with text. Other options include "cm", "in" (inches) and "lines" (of text).
+
+plt_mpg_vs_wt_by_cyl is available. The panel and legend are wrapped in blue boxes so you can see how they change.
+
+
+
+```{r}
+# View the original plot
+plt_mpg_vs_wt_by_cyl
+
+plt_mpg_vs_wt_by_cyl +
+  theme(
+    # Set the axis tick length to 2 lines
+    axis.ticks.length = unit(2,'lines')
+  )
+```
+
+
+```{r}
+plt_mpg_vs_wt_by_cyl +
+  theme(
+    # Set the legend key size to 3 centimeters
+    legend.key.size = unit(3,'cm')
+  )
+```
+
+
+```{r}
+plt_mpg_vs_wt_by_cyl +
+  theme(
+    # Set the legend margin to (20, 30, 40, 50) points
+    legend.margin = margin(20,30,40,50,'pt')
+  )
+```
+
+```{r}
+plt_mpg_vs_wt_by_cyl +
+  theme(
+    # Set the plot margin to (10, 30, 50, 70) millimeters
+    plot.margin = margin(10,30,50,70,'mm')
+  )
+```
+
+
+## Built-in themes
+
+In addition to making your own themes, there are several out-of-the-box solutions that may save you lots of time.
+
+    theme_gray() is the default.
+    theme_bw() is useful when you use transparency.
+    theme_classic() is more traditional.
+    theme_void() removes everything but the data.
+
+plt_prop_unemployed_over_time is available.
+
+
+## Exploring ggthemes
+
+Outside of ggplot2, another source of built-in themes is the ggthemes package. The workspace already contains the plt_prop_unemployed_over_time, the line plot from before. Let's explore some of the ready-made ggthemes themes.
+
+plt_prop_unemployed_over_time is available.
+
+
+
+## Setting themes
+
+Reusing a theme across many plots helps to provide a consistent style. You have several options for this.
+
+    Assign the theme to a variable, and add it to each plot.
+    Set your theme as the default using theme_set().
+
+A good strategy that you'll use here is to begin with a built-in theme then modify it.
+
+plt_prop_unemployed_over_time is available. The theme you made earlier is shown in the sample code.
+
+```{r}
+# Theme layer saved as an object, theme_recession
+theme_recession <- theme(
+  rect = element_rect(fill = "grey92"),
+  legend.key = element_rect(color = NA),
+  axis.ticks = element_blank(),
+  panel.grid = element_blank(),
+  panel.grid.major.y = element_line(color = "white", size = 0.5, linetype = "dotted"),
+  axis.text = element_text(color = "grey25"),
+  plot.title = element_text(face = "italic", size = 16),
+  legend.position = c(0.6, 0.1)
+)
+
+# Combine the Tufte theme with theme_recession
+theme_tufte_recession <- theme_tufte() + theme_recession
+
+# Add the recession theme to the plot
+plt_prop_unemployed_over_time + theme_tufte_recession
+
+# Set theme_tufte_recession as the default theme
+theme_set(theme_tufte_recession)
+
+# Draw the plot (without explicitly adding a theme)
+plt_prop_unemployed_over_time
+```
+
+
+## Publication-quality plots
+
+We've seen many examples of beautiful, publication-quality plots. Let's take a final look and put all the pieces together.
+
+plt_prop_unemployed_over_time is available.
+
+
+```{r}
+plt_prop_unemployed_over_time +
+  theme_tufte() +
+  theme(
+    legend.position = "none",
+    axis.ticks = element_blank(),
+    axis.title = element_text(color = "grey60"),
+    axis.text = element_text(color = "grey60"),
+    # Set the panel gridlines major y values
+    panel.grid.major.y = element_line(
+      # Set the color to grey60
+      color = 'grey60',
+      # Set the size to 0.25
+      size= 0.25,
+      # Set the linetype to dotted
+      linetype = 'dotted'
+    )
+  )
+```
+
+## Using geoms for explanatory plots
+
+Let's focus on producing beautiful and effective explanatory plots. In the next couple of exercises, you'll create a plot that is similar to the one shown in the video using gm2007, a filtered subset of the gapminder dataset.
+
+This type of plot will be in an info-viz style, meaning that it would be similar to something you'd see in a magazine or website for a mostly lay audience.
+
+A scatterplot of lifeExp by country, colored by lifeExp, with points of size 4, is provided.
+
+```{r}
+top10 <- gapminder::gapminder %>% filter(year == 2007) %>% arrange(lifeExp) %>% tail(10)
+bottom10 <- gapminder::gapminder %>% filter(year == 2007) %>% arrange(lifeExp) %>% head(10)
+gm2007 <- rbind(top10,bottom10) %>% arrange(country)
+```
+
+
+
+```{r}
+# Add a geom_segment() layer
+ggplot(gm2007, aes(x = lifeExp, y = country, color = lifeExp)) +
+  geom_point(size = 4) +
+  geom_segment(aes(xend = 30, yend = country), size = 2)
+```
+
+```{r}
+# Set the color scale
+library(RColorBrewer)
+palette <- brewer.pal(5, "RdYlBu")[-(2:4)]
+
+# Modify the scales
+ggplot(gm2007, aes(x = lifeExp, y = country, color = lifeExp)) +
+  geom_point(size = 4) +
+  geom_segment(aes(xend = 30, yend = country), size = 2) +
+  geom_text(aes(label = round(lifeExp,1)), color = "white", size = 1.5) +
+  scale_x_continuous("", expand = c(0,0), limits = c(30,90), position = 'top') +
+  scale_color_gradientn(colors = palette) +
+   labs(title= "Highest and lowest life expectancies, 2007",
+  caption = "Source: gapminder")
+```
+
+```{r}
+plt_country_vs_lifeExp <- ggplot(gm2007, aes(x = lifeExp, y = country, color = lifeExp)) +
+  geom_point(size = 4) +
+  geom_segment(aes(xend = 30, yend = country), size = 2) +
+  geom_text(aes(label = round(lifeExp,1)), color = "white", size = 1.5) +
+  scale_x_continuous("", expand = c(0,0), limits = c(30,90), position = 'top') +
+  scale_color_gradientn(colors = palette) +
+   labs(title= "Highest and lowest life expectancies, 2007",
+  caption = "Source: gapminder")
+
+```
+
+## Using annotate() for embellishments
+
+In the previous exercise, we completed our basic plot. Now let's polish it by playing with the theme and adding annotations. In this exercise, you'll use annotate() to add text and a curve to the plot.
+
+The following values have been calculated for you to assist with adding embellishments to the plot:
+
+```{r}
+gm_2007 <- gapminder::gapminder %>% filter( year == 2007)
+
+global_mean <- mean(gm_2007$lifeExp)
+x_start <- global_mean + 4
+y_start <- 5.5
+x_end <- global_mean
+y_end <- 7.5
+
+```
+
+Our previous plot has been assigned to plt_country_vs_lifeExp
+
+```{r}
+# Define the theme
+plt_country_vs_lifeExp +
+  theme_classic() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text = element_text(color='black'),
+        axis.title = element_blank(),
+        legend.position = 'none') +
+    geom_vline(xintercept = global_mean, color='grey40', linetype=3)
+```
+
+
+```{r}
+plt_country_vs_lifeExp +
+  theme_classic() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text = element_text(color='black'),
+        axis.title = element_blank(),
+        legend.position = 'none') +
+    geom_vline(xintercept = global_mean, color='grey40', linetype=3) + 
+    annotate(
+    "text",
+    x = x_start, y = y_start,
+    label = "The\nglobal\naverage",
+    vjust = 1, size = 3, color = "grey40"
+  )
+```
+
+```{r}
+plt_country_vs_lifeExp +
+  theme_classic() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text = element_text(color='black'),
+        axis.title = element_blank(),
+        legend.position = 'none') +
+    geom_vline(xintercept = global_mean, color='grey40', linetype=3) + 
+    annotate(
+    "text",
+    x = x_start, y = y_start,
+    label = "The\nglobal\naverage",
+    vjust = 1, size = 3, color = "grey40"
+  ) +
+    annotate(
+    "curve",
+    x = x_start, y = y_start,
+    xend = x_end, yend = y_end,
+    arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+    color = "grey40"
+  )
+```
+
+## Grouping variables
+
+We'll continue with the previous exercise by considering the situation of looking at sub-groups in our dataset. For this we'll encounter the invisible group aesthetic.
+
+mtcars has been given an extra column, fcyl, that is the cyl column converted to a proper factor variable.
+
+```{r}
+# Amend the plot to add another smooth layer with dummy grouping
+ggplot(mtcars, aes(x = wt, y = mpg, color = factor(cyl))) +
+  geom_point() +
+  stat_smooth(group=1,method = "lm", se = FALSE)+
+stat_smooth(aes(group=1), method='lm',se=F)
+```
+
+
+## Modifying stat_smooth
+
+In the previous exercise we used se = FALSE in stat_smooth() to remove the 95% Confidence Interval. Here we'll consider another argument, span, used in LOESS smoothing, and we'll take a look at a nice scenario of properly mapping different models.
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  # Add 3 smooth LOESS stats, varying span & color
+  stat_smooth(se = FALSE, span = 0.9, color = 'red') +
+  stat_smooth(se = FALSE, span = 0.6, color = 'green') +
+  stat_smooth(se = FALSE, span = 0.3, color = 'blue') 
+```
+
+## Compare LOESS and linear regression smoothing on small regions of data.
+
+    Add a smooth LOESS stat, without the standard error ribbon.
+    Add a smooth linear regression stat, again without the standard error ribbon.
+
+
+```{r}
+# Amend the plot to color by fcyl
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  # Add a smooth LOESS stat, no ribbon
+  stat_smooth(se=F,) +
+  # Add a smooth lin. reg. stat, no ribbon
+ stat_smooth(method='lm', se=F)
+```
+
+
+LOESS isn't great on very short sections of data; compare the pieces of linear regression to LOESS over the whole thing.
+
+    Amend the smooth LOESS stat to map color to a dummy variable, "All".
+
+
+
+```{r}
+# Amend the plot
+ggplot(mtcars, aes(x = wt, y = mpg, color = factor(cyl))) +
+  geom_point() +
+  # Map color to dummy variable "All"
+  stat_smooth(aes(color='All'),se = FALSE) +
+  stat_smooth(method = "lm", se = FALSE)
+```
+
+
+
+```{r}
+# Amend the plot
+ggplot(Vocab, aes(x = education, y = vocabulary, color = year_group)) +
+  geom_jitter(alpha = 0.25) +
+  # Map the fill color to year_group, set the line size to 2
+  stat_smooth(aes(fill=year_group),method = "lm",size=2)
+```
+## Quantiles
+
+Here, we'll continue with the Vocab dataset and use stat_quantile() to apply a quantile regression.
+
+Linear regression predicts the mean response from the explanatory variables, quantile regression predicts a quantile response (e.g. the median) from the explanatory variables. Specific quantiles can be specified with the quantiles argument.
+
+Specifying many quantiles and color your models according to year can make plots too busy. We'll explore ways of dealing with this in the next chapter.
+
+```{r}
+# Amend the plot to color by year_group
+ggplot(Vocab, aes(x = education, y = vocabulary, color=year_group)) +
+  geom_jitter(alpha = 0.25) +
+  stat_quantile(quantiles = c(0.05, 0.5, 0.95))
+```
+
+## Using stat_sum
+
+In the Vocab dataset, education and vocabulary are integer variables. In the first course, you saw that this is one of the four causes of overplotting. You'd get a single point at each intersection between the two variables.
+
+One solution, shown in the step 1, is jittering with transparency. Another solution is to use stat_sum(), which calculates the total number of overlapping observations and maps that onto the size aesthetic.
+
+stat_sum() allows a special variable, ..prop.., to show the proportion of values within the dataset.
+
+```{r}
+# Run this, look at the plot, then update it
+ggplot(Vocab, aes(x = education, y = vocabulary)) +
+  # Replace this with a sum stat
+  stat_sum(alpha = 0.25)
+```
+
+```{r}
+ggplot(Vocab, aes(x = education, y = vocabulary)) +
+  stat_sum() +
+  # Add a size scale, from 1 to 10
+  scale_size(range= c(1,10))
+```
+
+```{r}
+# Amend the stat to use proportion sizes
+ggplot(Vocab, aes(x = education, y = vocabulary)) +
+  stat_sum(aes(size = ..prop..))
+```
+
+```{r}
+# Amend the plot to group by education
+ggplot(Vocab, aes(x = education, y = vocabulary, group= education)) +
+  stat_sum(aes(size = ..prop..))
+```
+
+## Preparations
+
+In the following exercises, we'll aim to make the plot shown in the viewer. Here, we'll establish our positions and base layer of the plot.
+
+Establishing these items as independent objects will allow us to recycle them easily in many layers, or plots.
+
+    position_jitter() adds jittering (e.g. for points).
+    position_dodge() dodges geoms, (e.g. bar, col, boxplot, violin, errorbar, pointrange).
+    position_jitterdodge() jitters and dodges geoms, (e.g. points).
+
+As before, we'll use mtcars, where fcyl and fam are proper factor variables of the original cyl and am variables.
+
+```{r}
+  # Define position objects
+# 1. Jitter with width 0.2
+posn_j <- position_jitter(width=0.2)
+
+# 2. Dodge with width 0.1
+posn_d <- position_dodge(width=0.1)
+
+# 3. Jitter-dodge with jitter.width 0.2 and dodge.width 0.1
+posn_jd <- position_jitterdodge(jitter.width=0.2, dodge.width=0.1)
+
+# Create the plot base: wt vs. fcyl, colored by fam
+p_wt_vs_fcyl_by_fam <- ggplot(mtcars,aes(x=factor(cyl), y=wt, color=factor(am)))
+
+# Add a point layer
+p_wt_vs_fcyl_by_fam +
+  geom_point()
+
+```
+
+## Using position objects
+
+Now that the position objects have been created, you can apply them to the base plot to see their effects. You do this by adding a point geom and setting the position argument to the position object.
+
+The variables from the last exercise, posn_j, posn_d, posn_jd, and p_wt_vs_fcyl_by_fam are available in your workspace.
+
+```{r}
+# Add jittering only
+ p_wt_vs_fcyl_by_fam_jit <- p_wt_vs_fcyl_by_fam +
+geom_point(position =posn_j)
+```
+
+```{r}
+# Add dodging only
+p_wt_vs_fcyl_by_fam +
+  geom_point(position= posn_d)
+```
+
+
+```{r}
+# Add jittering and dodging
+p_wt_vs_fcyl_by_fam +
+  geom_point(position=posn_jd)
+```
+
+## Plotting variations
+
+The preparation is done; now let's explore stat_summary().
+
+Summary statistics refers to a combination of location (mean or median) and spread (standard deviation or confidence interval).
+
+These metrics are calculated in stat_summary() by passing a function to the fun.data argument. mean_sdl(), calculates multiples of the standard deviation and mean_cl_normal() calculates the t-corrected 95% CI.
+
+Arguments to the data function are passed to stat_summary()'s fun.args argument as a list.
+
+The position object, posn_d, and the plot with jittered points, p_wt_vs_fcyl_by_fam_jit, are available.
+
+```{r}
+p_wt_vs_fcyl_by_fam_jit +
+  # Change the geom to be an errorbar
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), position = posn_d)
+```
+
+
+```{r}
+p_wt_vs_fcyl_by_fam_jit +
+  # Change the geom to be an errorbar
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), position = posn_d,
+  geom = 'errorbar')
+```
+
+```{r}
+p_wt_vs_fcyl_by_fam_jit +
+  # Add a summary stat of normal confidence limits
+  stat_summary(fun.data = mean_cl_normal,
+              fun.args = list(mult=1),
+              position = posn_d
+              )
+```
+
+## Zooming In
+
+In the video, you saw different ways of using the coordinates layer to zoom in. In this exercise, we'll compare zooming by changing scales and by changing coordinates.
+
+The big difference is that the scale functions change the underlying dataset, which affects calculations made by computed geoms (like histograms or smooth trend lines), whereas coordinate functions make no changes to the dataset.
+
+A scatter plot using mtcars with a LOESS smoothed trend line is provided. Take a look at this before updating it.
+
+```{r}
+# Run the code, view the plot, then update it
+ggplot(mtcars, aes(x = wt, y = hp, color = factor(am))) +
+  geom_point() +
+  geom_smooth() 
+```
+
+
+```{r}
+# Run the code, view the plot, then update it
+ggplot(mtcars, aes(x = wt, y = hp, color = factor(am))) +
+  geom_point() +
+  geom_smooth() +
+
+    # Add a continuous x scale from 3 to 6
+  scale_x_continuous(limits = c(3,6))
+
+```
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = hp, color = factor(am))) +
+  geom_point() +
+  geom_smooth() +
+  # Add Cartesian coordinates with x limits from 3 to 6
+coord_cartesian(xlim= c(3,6))
+```
+
+*Zesty zooming! Using the scale function to zoom in meant that there wasn't enough data to calculate the trend line, and geom_smooth() failed. When coord_cartesian() was applied, the full dataset was used for the trend calculation.* 
+
+## Aspect ratio I: 1:1 ratios
+
+We can set the aspect ratio of a plot with coord_fixed(), which uses ratio = 1 as a default. A 1:1 aspect ratio is most appropriate when two continuous variables are on the same scale, as with the iris dataset.
+
+All variables are measured in centimeters, so it only makes sense that one unit on the plot should be the same physical distance on each axis. This gives a more truthful depiction of the relationship between the two variables since the aspect ratio can change the angle of our smoothing line. This would give an erroneous impression of the data. Of course the underlying linear models don't change, but our perception can be influenced by the angle drawn.
+
+A plot using the iris dataset, of sepal width vs. sepal length colored by species, is shown in the viewer.
+```{r}
+ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
+  geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE) +
+  # Fix the coordinate ratio
+  coord_fixed(ratio=1)
+```
+
+## Aspect ratio II: setting ratios
+
+When values are not on the same scale it can be a bit tricky to set an appropriate aspect ratio. A classic William Cleveland (inventor of dot plots) example is the sunspots data set. We have 3200 observations from 1750 to 2016.
+
+sun_plot is a plot without any set aspect ratio. It fills up the graphics device.
+
+To make aspect ratios clear, we've drawn an orange box that is 75 units high and 75 years wide. Using a 1:1 aspect ratio would make the box square. That aspect ratio would make things harder to see the oscillations: it is better to force a wider ratio.
+
+
+```{r eval=FALSE, include=FALSE}
+# Change the aspect ratio to 20:1
+sun_plot +
+  coord_fixed(ratio= 20)
+```
+
+## Expand and clip
+
+The coord_*() layer functions offer two useful arguments that work well together: expand and clip.
+
+    expand sets a buffer margin around the plot, so data and axes don't overlap. Setting expand to 0 draws the axes to the limits of the data.
+    clip decides whether plot elements that would lie outside the plot panel are displayed or ignored ("clipped").
+
+When done properly this can make a great visual effect! We'll use theme_classic() and modify the axis lines in this example.
+
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point(size = 2) +
+  # Turn clipping off
+  coord_cartesian(expand = 0, clip='off') +
+  theme_classic() +
+  # Remove axis lines
+  theme(axis.line = element_blank())
+```
+
+## Log-transforming scales
+
+Using scale_y_log10() and scale_x_log10() is equivalent to transforming our actual dataset before getting to ggplot2.
+
+Using coord_trans(), setting x = "log10" and/or y = "log10" arguments, transforms the data after statistics have been calculated. The plot will look the same as with using scale_*_log10(), but the scales will be different, meaning that we'll see the original values on our log10 transformed axes. This can be useful since log scales can be somewhat unintuitive.
+
+Let's see this in action with positively skewed data - the brain and body weight of 51 mammals from the msleep dataset.
+
+```{r}
+# Produce a scatter plot of brainwt vs. bodywt
+ggplot(msleep, aes(x=bodywt, brainwt)) +
+  geom_point() +
+  ggtitle("Raw Values")
+```
+
+```{r}
+# Add scale_*_*() functions
+ggplot(msleep, aes(bodywt, brainwt)) +
+  geom_point() +
+  scale_x_log10() +
+  scale_y_log10() +
+  ggtitle("Scale_ functions")
+```
+
+```{r}
+# Perform a log10 coordinate system transformation
+ggplot(msleep, aes(bodywt, brainwt)) +
+  geom_point() +
+coord_trans(x = 'log10',
+            y='log10')
+```
+
+
+## Adding stats to transformed scales
+
+In the last exercise, we saw the usefulness of the coord_trans() function, but be careful! Remember that statistics are calculated on the untransformed data. A linear model may end up looking not-so-linear after an axis transformation. Let's revisit the two plots from the previous exercise and compare their linear models.
+```{r}
+# Plot with a scale_*_*() function:
+ggplot(msleep, aes(bodywt, brainwt)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  # Add a log10 x scale
+  scale_x_log10() +
+  # Add a log10 y scale
+  scale_y_log10() +
+  ggtitle("Scale functions")
+```
+
+
+```{r}
+# Plot with transformed coordinates
+ggplot(msleep, aes(bodywt, brainwt)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  # Add a log10 coordinate transformation for x and y axes
+  coord_trans(x='log10',
+              y='log10')
+```
+
+
+## Useful double axes
+
+Double x and y-axes are a contentious topic in data visualization. We'll revisit that discussion at the end of chapter 4. Here, I want to review a great use case where double axes actually do add value to a plot.
+
+Our goal plot is displayed in the viewer. The two axes are the raw temperature values on a Fahrenheit scale and the transformed values on a Celsius scale.
+
+You can imagine a similar scenario for Log-transformed and original values, miles and kilometers, or pounds and kilograms. A scale that is unintuitive for many people can be made easier by adding a transformation as a double axis.
+
+
+
+```{r}
+# Using airquality, plot Temp vs. Date
+ggplot(airquality,aes(x=Date, y=Temp)) +
+  # Add a line layer
+  geom_line() +
+  labs(x = "Date (1973)", y = "Fahrenheit")
+```
+
+
+```{r}
+# Define breaks (Fahrenheit)
+y_breaks <- c(59, 68, 77, 86, 95, 104)
+
+# Convert y_breaks from Fahrenheit to Celsius
+y_labels <- (y_breaks - 32)*5 / 9
+
+# Create a secondary x-axis
+secondary_y_axis <- sec_axis(
+  # Use identity transformation
+  trans = identity,
+  name = "Celsius",
+  # Define breaks and labels as above
+  breaks = y_breaks,
+  labels = y_labels
+)
+
+# Examine the object
+secondary_y_axis
+```
+
+
+```{r}
+# Update the plot
+ggplot(airquality, aes(Date, Temp)) +
+  geom_line() +
+  # Add the secondary y-axis 
+  scale_y_continuous(sec.axis = secondary_y_axis) +
+  labs(x = "Date (1973)", y = "Fahrenheit")
+```
+
+## Flipping axes I
+
+Flipping axes means to reverse the variables mapped onto the x and y aesthetics. We can just change the mappings in aes(), but we can also use the coord_flip() layer function.
+
+There are two reasons to use this function:
+
+    We want a vertical geom to be horizontal, or
+    We've completed a long series of plotting functions and want to flip it without having to rewrite all our commands.
+
+
+```{r}
+# Plot fcyl bars, filled by fam
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  # Place bars side by side
+  geom_bar(position = 'dodge')
+```
+
+
+```{r}
+
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  geom_bar(position = 'dodge') +
+  
+  coord_flip()
+```
+
+
+```{r}
+ggplot(mtcars, aes(factor(cyl), fill = factor(am))) +
+  # Set a dodge width of 0.5 for partially overlapping bars
+  geom_bar(position = position_dodge(width = 0.5)) +
+  coord_flip()
+```
+
+
+## Flipping axes II
+
+In this exercise, we'll continue to use the coord_flip() layer function to reverse the variables mapped onto the x and y aesthetics.
+
+Within the mtcars dataset, car is the name of the car and wt is its weight.
+
+```{r}
+# Plot of wt vs. car
+ggplot(mtcars,aes(x= car, y=wt)) +
+  # Add a point layer
+  geom_point() +
+  labs(x = "car", y = "weight")
+```
+
+```{r}
+# Flip the axes to set car to the y axis
+ggplot(mtcars, aes(car, wt)) +
+  geom_point() +
+  labs(x = "car", y = "weight") +
+  coord_flip()
+```
+
+
+## Pie charts
+
+The coord_polar() function converts a planar x-y Cartesian plot to polar coordinates. This can be useful if you are producing pie charts.
+
+We can imagine two forms for pie charts - the typical filled circle, or a colored ring.
+
+Typical pie charts omit all of the non-data ink, which we saw in the themes chapter of the last course. Pie charts are not really better than stacked bar charts, but we'll come back to this point in the next chapter.
+
+A bar plot using mtcars of the number of cylinders (as a factor), fcyl, is shown in the plot viewer.
+
+```{r}
+ggplot(mtcars, aes(x = 1, fill = factor(cyl))) +
+  # Reduce the bar width to 0.1
+  geom_bar(width=0.1) +
+  coord_polar(theta = "y") +
+  # Add a continuous x scale from 0.5 to 1.5
+  scale_x_continuous(limits=c(0.5,1.5))
+```
+
+## Wind rose plots
+
+Polar coordinate plots are well-suited to scales like compass direction or time of day. A popular example is the "wind rose".
+
+The wind dataset is taken from the openair package and contains hourly measurements for windspeed (ws) and direction (wd) from London in 2003. Both variables are factors.
+
+```{r}
+wind <- openair::mydata
+# Convert to polar coordinates:
+ggplot(wind, aes(wd, fill = ws)) +
+  geom_bar(width = 1) 
+
+```
+
+```{r}
+# Convert to polar coordinates:
+ggplot(wind, aes(wd, fill = ws)) +
+  geom_bar(width = 1) +
+  coord_polar(start= -pi/16)
+```
+
+
+## Facet layer basics
+
+Faceting splits the data up into groups, according to a categorical variable, then plots each group in its own panel. For splitting the data by one or two categorical variables, facet_grid() is best.
+
+Given categorical variables A and B, the code pattern is
+
+plot +
+  facet_grid(rows = vars(A), cols = vars(B))
+
+This draws a panel for each pairwise combination of the values of A and B.
+
+Here, we'll use the mtcars data set to practice. Although cyl and am are not encoded as factor variables in the data set, ggplot2 will coerce variables to factors when used in facets.
+
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) + 
+  geom_point() +
+  # Facet rows by am and columns by cyl
+  facet_grid(rows=vars(am), cols=vars(cyl))
+```
+
+```{r}
+# See the interaction column
+mtcars$fcyl_fam
+
+# Color the points by fcyl_fam
+ggplot(mtcars, aes(x = wt, y = mpg, color = fcyl_fam)) +
+  geom_point() +
+  # Use a paired color palette
+  scale_color_brewer(palette ="Paired")
+```
+
+
+```{r}
+# Update the plot
+ggplot(mtcars, aes(x = wt, y = mpg, color = fcyl_fam, size = disp)) +
+  geom_point() +
+  scale_color_brewer(palette = "Paired") +
+  # Grid facet on gear and vs
+  facet_grid(rows = vars(gear), cols = vars(vs))
+```
+
+
+## Formula notation
+
+As well as the vars() notation for specifying which variables should be used to split the dataset into facets, there is also a traditional formula notation. The three cases are shown in the table.
+Modern notation 	Formula notation
+facet_grid(rows = vars(A)) -->	facet_grid(A ~ .)
+facet_grid(cols = vars(B)) 	 --> facet_grid(. ~ B)
+facet_grid(rows = vars(A), cols = vars(B)) 	--> facet_grid(A ~ B)
+
+mpg_by_wt is available again. Rework the previous plots, this time using formula notation.
+
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) + 
+  geom_point() +
+  # Facet rows by am using formula notation
+  facet_grid(am~.)
+```
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) + 
+  geom_point() +
+  # Facet columns by cyl using formula notation
+  facet_grid(.~cyl)
+```
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) + 
+  geom_point() +
+  # Facet rows by am and columns by cyl using formula notation
+  facet_grid(am~cyl)
+```
+
+## Labeling facets
+
+If your factor levels are not clear, your facet labels may be confusing. You can assign proper labels in your original data before plotting (see next exercise), or you can use the labeller argument in the facet layer.
+
+The default value is
+
+    label_value: Default, displays only the value
+
+Common alternatives are:
+
+    label_both: Displays both the value and the variable name
+    label_context: Displays only the values or both the values and variables depending on whether multiple factors are faceted
+
+
+```{r}
+# Plot wt by mpg
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  # The default is label_value
+  facet_grid(cols = vars(cyl))
+```
+
+```{r}
+# Plot wt by mpg
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  # Displaying both the values and the variables
+  facet_grid(cols = vars(cyl), labeller = label_both)
+```
+
+```{r}
+# Plot wt by mpg
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  # Label context
+  facet_grid(cols = vars(cyl), labeller = label_context)
+```
+
+```{r}
+# Plot wt by mpg
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  # Two variables
+  facet_grid(cols = vars(vs, cyl), labeller = label_context)
+```
+
+
+
+## Setting order
+
+If you want to change the order of your facets, it's best to properly define your factor variables before plotting.
+
+Let's see this in action with the mtcars transmission variable am. In this case, 0 = "automatic" and 1 = "manual".
+
+Here, we'll make am a factor variable and relabel the numbers to proper names. The default order is alphabetical. To rearrange them we'll call fct_rev() from the forcats package to reverse the order.
+
+```{r}
+# Make factor, set proper labels explictly
+mtcars$fam <- factor(mtcars$am, labels = c(`0` = 'automatic',
+                                           `1` = 'manual'))
+
+# Default order is alphabetical
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  facet_grid(cols = vars(fam))
+```
+
+```{r}
+# Make factor, set proper labels explictly, and
+# manually set the label order
+mtcars$fam <- factor(mtcars$am,
+                     levels = c(1, 0),
+                     labels = c('manual', 'automatic'))
+
+# View again
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() +
+  facet_grid(cols = vars(fam))
+```
+
+## Variable plotting spaces I: continuous variables
+
+By default every facet of a plot has the same axes. If the data ranges vary wildly between facets, it can be clearer if each facet has its own scale. This is achieved with the scales argument to facet_grid().
+
+    "fixed" (default): axes are shared between facets.
+    free: each facet has its own axes.
+    free_x: each facet has its own x-axis, but the y-axis is shared.
+    free_y: each facet has its own y-axis, but the x-axis is shared.
+
+When faceting by columns, "free_y" has no effect, but we can adjust the x-axis. In contrast, when faceting by rows, "free_x" has no effect, but we can adjust the y-axis.
+
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() + 
+  # Facet columns by cyl 
+  facet_grid(cols =vars(cyl))
+```
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() + 
+  # Update the faceting to free the x-axis scales
+  facet_grid(cols = vars(cyl),
+            scales = 'free_x')
+```
+
+
+```{r}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point() + 
+  # Swap cols for rows; free the y-axis scales
+  facet_grid(rows = vars(cyl), scales = "free_y")
+```
+
+## Variable plotting spaces II: categorical variables
+
+When you have a categorical variable with many levels which are not all present in each sub-group of another variable, it's usually desirable to drop the unused levels.
+
+By default, each facet of a plot is the same size. This behavior can be changed with the spaces argument, which works in the same way as scales: "free_x" allows different sized facets on the x-axis, "free_y", allows different sized facets on the y-axis, "free" allows different sizes in both directions.
+
+```{r}
+ggplot(mtcars, aes(x = mpg, y = car, color = fam)) +
+  geom_point() +
+  # Facet rows by gear
+  facet_grid(rows = vars(gear))
+```
+
+```{r}
+ggplot(mtcars, aes(x = mpg, y = car, color = fam)) +
+  geom_point() +
+  # Free the y scales and space
+  facet_grid(rows = vars(gear),
+            scales= 'free_y',
+            space= 'free_y')
+```
+
+
+
+## Wrapping for many levels
+
+facet_grid() is fantastic for categorical variables with a small number of levels. Although it is possible to facet variables with many levels, the resulting plot will be very wide or very tall, which can make it difficult to view.
+
+The solution is to use facet_wrap() which separates levels along one axis but wraps all the subsets across a given number of rows or columns.
+
+For this plot, we'll use the Vocab dataset that we've already seen. The base layer is provided.
+
+Since we have many years, it doesn't make sense to use facet_grid(), so let's try facet_wrap() instead.
+
+
+```{r}
+library(car)
+
+ggplot(Vocab, aes(x = education, y = vocabulary)) +
+  stat_smooth(method = "lm", se = FALSE) +
+  # Create facets, wrapping by year, using vars()
+  facet_wrap(vars(year))
+```
+
+
+```{r}
+ggplot(Vocab, aes(x = education, y = vocabulary)) +
+  stat_smooth(method = "lm", se = FALSE) +
+  # Create facets, wrapping by year, using a formula
+  facet_wrap(~ year)
+```
+
+
+
+```{r}
+ggplot(Vocab, aes(x = education, y = vocabulary)) +
+  stat_smooth(method = "lm", se = FALSE) +
+  # Update the facet layout, using 11 columns
+  facet_wrap(~ year, ncol=11)
+```
+
+## Margin plots
+
+Facets are great for seeing subsets in a variable, but sometimes you want to see both those subsets and all values in a variable.
+
+Here, the margins argument to facet_grid() is your friend.
+
+    FALSE (default): no margins.
+    TRUE: add margins to every variable being faceted by.
+    c("variable1", "variable2"): only add margins to the variables listed.
+
+To make it easier to follow the facets, we've created two factor variables with proper labels — fam for the transmission type, and fvs for the engine type, respectively.
+
+Zoom the graphics window to better view your plots.
+
+
+```{r echo=TRUE}
+
+mtcars$fam <- factor(mtcars$am,
+                     levels = c(1, 0),
+                     labels = c('manual', 'automatic'))
+
+
+mtcars$fvs <- factor( mtcars$vs,
+                     levels = c(1,0),
+                     labels =c ("Straight", "V-shape"))
+
+mtcars$fcyl <- factor(mtcars$cyl)
+
+
+ggplot(mtcars, aes(x = wt, y = mpg)) + 
+  geom_point() +
+  # Facet rows by fvs and cols by fam
+  facet_grid(rows=vars( fvs,fam),
+              cols= vars(gear))
+```
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) + 
+  geom_point() +
+  # Update the facets to add margins
+  facet_grid(rows = vars(fvs,fam), cols = vars(gear),
+  margins= TRUE)
+```
+
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) + 
+  geom_point() +
+  # Update the facets to only show margins on gear and fvs
+  facet_grid(rows = vars(fvs, fam), cols = vars(gear), margins = "fam")
+```
+
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) + 
+  geom_point() +
+  # Update the facets to only show margins on gear and fvs
+  facet_grid(rows = vars(fvs, fam), cols = vars(gear), margins = c("gear","fvs"))
+```
+
+## Bar plots: dynamite plots
+
+In the video we saw many reasons why "dynamite plots" (bar plots with error bars) are not well suited for their intended purpose of depicting distributions. If you really want error bars on bar plots, you can of course get them, but you'll need to set the positions manually. A point geom will typically serve you much better.
+
+Nonetheless, you should know how to handle these kinds of plots, so let's give it a try.
+
+```{r}
+# Plot wt vs. fcyl
+ggplot(mtcars, aes(x = fcyl, y = wt)) +
+  # Add a bar summary stat of means, colored skyblue
+  stat_summary(fun.y = mean, geom = "bar", fill = "skyblue") +
+  # Add an errorbar summary stat std deviation limits
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.1)
+```
+
+## Bar plots: position dodging
+
+In the previous exercise we used the mtcars dataset to draw a dynamite plot about the weight of the cars per cylinder type.
+
+In this exercise we will add a distinction between transmission type, fam, for the dynamite plots and explore position dodging (where bars are side-by-side).
+
+```{r}
+# Update the aesthetics to color and fill by fam
+ggplot(mtcars, aes(x = fcyl, y = wt, color= fam, fill=fam)) +
+  stat_summary(fun.y = mean, geom = "bar") +
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.1)
+```
+
+```{r}
+# Set alpha for the first and set position for each stat summary function
+ggplot(mtcars, aes(x = fcyl, y = wt, color = fam, fill = fam)) +
+  stat_summary(fun.y = mean, geom = "bar", position = 'dodge', alpha = 0.5) +
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", position = 'dodge', width = 0.1)
+```
+
+
+```{r}
+# Define a dodge position object with width 0.9
+posn_d <- position_dodge(width=0.9)
+
+# For each summary stat, update the position to posn_d
+ggplot(mtcars, aes(x = fcyl, y = wt, color = fam, fill = fam)) +
+  stat_summary(fun.y = mean, geom = "bar", position = posn_d, alpha = 0.5) +
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), width = 0.1, position = posn_d, geom = "errorbar")
+```
+
+## Bar plots: Using aggregated data
+
+If it is appropriate to use bar plots (see the video!), then it nice to give an impression of the number of values in each group.
+
+stat_summary() doesn't keep track of the count. stat_sum() does (that's the whole point), but it's difficult to access. It's more straightforward to calculate exactly what we want to plot ourselves.
+
+Here, we've created a summary data frame called mtcars_by_cyl which contains the average (mean_wt), standard deviations (sd_wt) and count (n_wt) of car weights, for each cylinder group, cyl. It also contains the proportion (prop) of each cylinder represented in the entire dataset. Use the console to familiarize yourself with the mtcars_by_cyl data frame.
+
+```{r}
+# Using mtcars_cyl, plot mean_wt vs. cyl
+ggplot(mtcars_by_cyl,aes(x=cyl,y=mean_wt)) +
+  # Add a bar layer with identity stat, filled skyblue
+  geom_bar(stat= 'identity', fill='skyblue')
+```
+```{r}
+ggplot(mtcars_by_cyl, aes(x = cyl, y = mean_wt)) +
+  geom_col(aes(width = prop), fill = "skyblue") +
+  # Add an errorbar layer
+  geom_errorbar(
+    # ... at mean weight plus or minus 1 std dev
+    aes(ymin = mean_wt - sd_wt, ymax = mean_wt + sd_wt),
+    # with width 0.1
+    width = 0.1
+  )
+```
+
+## Heat maps
+
+Since heat maps encode color on a continuous scale, they are difficult to accurately decode, a topic we discussed in the first course. Hence, heat maps are most useful if you have a small number of boxes and/or a clear pattern that allows you to overcome decoding difficulties.
+
+To produce them, map two categorical variables onto the x and y aesthetics, along with a continuous variable onto fill. The geom_tile() layer adds the boxes.
+
+We'll produce the heat map we saw in the video (in the viewer) with the built-in barley dataset. The barley dataset is in the lattice package and has already been loaded for you. Use str() to explore the structure.
+
+
+```{r}
+library(lattice)
+# Previously defined
+ggplot(barley, aes(x = year, y = variety, fill = yield)) +
+  geom_tile() + 
+  # Facet, wrapping by site, with 1 column
+  facet_wrap(facets = vars(site), ncol = 1) +
+  # Add a fill scale using an 2-color gradient
+  scale_fill_gradient(low = "white", high = "red")
+
+```
+
+```{r}
+library(RColorBrewer)
+# A palette of 9 reds
+red_brewer_palette <- brewer.pal(9, "Reds")
+
+# Update the plot
+ggplot(barley, aes(x = year, y = variety, fill = yield)) +
+  geom_tile() + 
+  facet_wrap(facets = vars(site), ncol = 1) +
+  # Update scale to use n-colors from red_brewer_palette
+  scale_fill_gradientn(colors= red_brewer_palette)
+```
+
+##Heat map alternatives
+
+There are several alternatives to heat maps. The best choice really depends on the data and the story you want to tell with this data. If there is a time component, the most obvious choice is a line plot.
+
+```{r}
+# The heat map we want to replace
+# Don't remove, it's here to help you!
+ggplot(barley, aes(x = year, y = variety, fill = yield)) +
+  geom_tile() +
+  facet_wrap( ~ site, ncol = 1) +
+  scale_fill_gradientn(colors = brewer.pal(9, "Reds"))
+
+# Using barley, plot yield vs. year, colored and grouped by variety
+ggplot(barley,aes(x=year, y= yield, color= variety, group= variety)) +
+  # Add a line layer
+  geom_line() +
+  # Facet, wrapping by site, with 1 row
+  facet_wrap( ~ site, nrow = 1)
+```
+
+
+```{r}
+# Using barely, plot yield vs. year, colored, grouped, and filled by site
+ggplot(barley, aes(x = year, y = yield, color = site, group = site, fill = site)) +
+  # Add a line summary stat aggregated by mean
+  stat_summary(fun.y = mean, geom = 'line') +
+  # Add a ribbon summary stat with 10% opacity, no color
+  stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = 'ribbon', alpha = 0.1, color = NA)
+```
+
+## Typical problems
+
+When you first encounter a data visualization, either from yourself or a colleague, you always want to critically ask if it's obscuring the data in any way.
+
+Let's take a look at the steps we could take to produce and improve the plot in the view.
+
+The data comes from an experiment where the effect of two different types of vitamin C sources, orange juice or ascorbic acid, were tested on the growth of the odontoblasts (cells responsible for tooth growth) in 60 guinea pigs.
+
+The data is stored in the TG data frame, which contains three variables: dose, len, and supp.
+
+```{r}
+
+library(plyr)
+TG <- ToothGrowth
+# Initial plot
+growth_by_dose <- ggplot(TG, aes(dose, len, color = supp)) +
+  stat_summary(fun.data = mean_sdl,
+               fun.args = list(mult = 1),
+               position = position_dodge(0.1)) +
+  theme_gray(3)
+
+# View plot
+growth_by_dose
+```
+
+
+```{r}
+# Change type
+TG$dose <- as.numeric(as.character(TG$dose))
+
+# Plot
+growth_by_dose <- ggplot(TG, aes(dose, len, color = supp)) +
+  stat_summary(fun.data = mean_sdl,
+               fun.args = list(mult = 1),
+               position = position_dodge(0.2)) +
+  stat_summary(fun.y = mean,
+               geom = "line",
+               position = position_dodge(0.1)) +
+  theme_classic() +
+  # Adjust labels and colors:
+  labs(x = "Dose (mg/day)", y = "Odontoblasts length (mean, standard deviation)", color = "Supplement") +
+  scale_color_brewer(palette = "Set1", labels = c("Orange juice", 'Ascorbic acid')) +
+  scale_y_continuous(limits = c(0,35), breaks = seq(0, 35, 5), expand = c(0,0))
+
+# View plot
+growth_by_dose
+```
+
+
+
+# Data Cleaning
+
+
+## Converting data types
+
+Throughout this chapter, you'll be working with San Francisco bike share ride data called bike_share_rides. It contains information on start and end stations of each trip, the trip duration, and some user information.
+
+Before beginning to analyze any dataset, it's important to take a look at the different types of columns you'll be working with, which you can do using glimpse().
+
+In this exercise, you'll take a look at the data types contained in bike_share_rides and see how an incorrect data type can flaw your analysis.
+
+dplyr and assertive are loaded and bike_share_rides is available.
+
+```{r}
+ bike_share_rides <- readRDS("bike_share_rides_ch1_1.rds")
+
+glimpse(bike_share_rides)
+
+summary(bike_share_rides$user_birth_year)
+```
+
+```{r}
+
+# Convert user_birth_year to factor: user_birth_year_fct
+bike_share_rides <- bike_share_rides %>%
+  mutate(user_birth_year_fct = factor(user_birth_year))
+
+# Assert user_birth_year_fct is a factor
+assertive::assert_is_factor(bike_share_rides$user_birth_year_fct)
+
+# Summary of user_birth_year_fct
+summary(bike_share_rides$user_birth_year_fct)
+```
+
+
+## Trimming strings
+
+In the previous exercise, you were able to identify the correct data type and convert user_birth_year to the correct type, allowing you to extract counts that gave you a bit more insight into the dataset.
+
+Another common dirty data problem is having extra bits like percent signs or periods in numbers, causing them to be read in as characters. In order to be able to crunch these numbers, the extra bits need to be removed and the numbers need to be converted from character to numeric. In this exercise, you'll need to convert the duration column from character to numeric, but before this can happen, the word "minutes" needs to be removed from each value.
+
+dplyr, assertive, and stringr are loaded and bike_share_rides is available.
+
+
+```{r}
+library(assertive)
+bike_share_rides <- bike_share_rides %>%
+  # Remove 'minutes' from duration: duration_trimmed
+  mutate(duration_trimmed = str_remove(duration,"minutes"),
+         # Convert duration_trimmed to numeric: duration_mins
+         duration_mins = as.numeric(duration_trimmed))
+
+# Glimpse at bike_share_rides
+glimpse(bike_share_rides)
+
+# Assert duration_mins is numeric
+assert_is_numeric(bike_share_rides$duration_mins)
+
+# Calculate mean duration
+mean(bike_share_rides$duration_mins)
+```
+
+
+## Ride duration constraints
+
+Values that are out of range can throw off an analysis, so it's important to catch them early on. In this exercise, you'll be examining the duration_min column more closely. Bikes are not allowed to be kept out for more than 24 hours, or 1440 minutes at a time, but issues with some of the bikes caused inaccurate recording of the time they were returned.
+
+In this exercise, you'll replace erroneous data with the range limit (1440 minutes), however, you could just as easily replace these values with NAs.
+
+dplyr, assertive, and ggplot2 are loaded and bike_share_rides is available.
+
+
+
+```{r}
+# Create breaks
+breaks <- c(min(bike_share_rides$duration_min), 0, 1440, max(bike_share_rides$duration_mins))
+
+# Create a histogram of duration_min
+ggplot(bike_share_rides, aes(x= duration_mins  )) +
+  geom_histogram(breaks = breaks)
+```
+
+
+```{r}
+# Create breaks
+breaks <- c(min(bike_share_rides$duration_min), 0, 1440, max(bike_share_rides$duration_min))
+
+# Create a histogram of duration_min
+ggplot(bike_share_rides, aes(duration_mins)) +
+  geom_histogram(breaks = breaks)
+
+# duration_min_const: replace vals of duration_min > 1440 with 1440
+bike_share_rides <- bike_share_rides %>%
+  mutate(duration_min_const = replace(duration_mins, duration_mins > 1440, 1440))
+
+# Make sure all values of duration_min_const are between 0 and 1440
+assert_all_are_in_closed_range(bike_share_rides$duration_min_const, lower = 0, upper = 1440)
+```
+
+## Back to the future
+
+Something has gone wrong and it looks like you have data with dates from the future, which is way outside of the date range you expected to be working with. To fix this, you'll need to remove any rides from the dataset that have a date in the future. Before you can do this, the date column needs to be converted from a character to a Date. Having these as Date objects will make it much easier to figure out which rides are from the future, since R makes it easy to check if one Date object is before (<) or after (>) another.
+
+dplyr and assertive are loaded and bike_share_rides is available.
+
+
+```{r}
+library(lubridate)
+# Convert date to Date type
+bike_share_rides <- bike_share_rides %>%
+  mutate(date = as.Date(date))
+
+# Make sure all dates are in the past
+assert_all_are_in_past(bike_share_rides$date)
+
+# Filter for rides that occurred before or on today's date
+bike_share_rides_past <- bike_share_rides %>%
+  filter(date < today())
+
+# Make sure all dates from bike_share_rides_past are in the past
+ 
+```
+
+
+
+## Full duplicates
+
+You've been notified that an update has been made to the bike sharing data pipeline to make it more efficient, but that duplicates are more likely to be generated as a result. To make sure that you can continue using the same scripts to run your weekly analyses about ride statistics, you'll need to ensure that any duplicates in the dataset are removed first.
+
+When multiple rows of a data frame share the same values for all columns, they're full duplicates of each other. Removing duplicates like this is important, since having the same value repeated multiple times can alter summary statistics like the mean and median. Each ride, including its ride_id should be unique.
+
+dplyr is loaded and bike_share_rides is available.
+
+```{r}
+# Count the number of full duplicates
+sum(duplicated(bike_share_rides))
+
+# Remove duplicates
+bike_share_rides_unique <- distinct(bike_share_rides)
+
+# Count the full duplicates in bike_share_rides_unique
+sum(duplicated(bike_share_rides_unique))
+```
+
+
+
+## Removing partial duplicates
+
+Now that you've identified and removed the full duplicates, it's time to check for partial duplicates. Partial duplicates are a bit tricker to deal with than full duplicates. In this exercise, you'll first identify any partial duplicates and then practice the most common technique to deal with them, which involves dropping all partial duplicates, keeping only the first.
+
+dplyr is loaded and bike_share_rides is available.
+
+
+```{r}
+# Find duplicated ride_ids
+bike_share_rides %>% 
+  # Count the number of occurrences of each ride_id
+  count(ride_id) %>% 
+  # Filter for rows with a count > 1
+  filter( n >1)
+```
+
+```{r}
+# Remove full and partial duplicates
+bike_share_rides_unique <- bike_share_rides %>%
+  # Only based on ride_id instead of all cols
+  distinct(ride_id, .keep_all = TRUE)
+```
+
+
+```{r}
+# Find duplicated ride_ids in bike_share_rides_unique
+bike_share_rides_unique %>%
+  # Count the number of occurrences of each ride_id
+  count(ride_id) %>%
+  # Filter for rows with a count > 1
+  filter(n>1)
+```
+
+## Aggregating partial duplicates
+
+Another way of handling partial duplicates is to compute a summary statistic of the values that differ between partial duplicates, such as mean, median, maximum, or minimum. This can come in handy when you're not sure how your data was collected and want an average, or if based on domain knowledge, you'd rather have too high of an estimate than too low of an estimate (or vice versa).
+
+dplyr is loaded and bike_share_rides is available.
+
+
+```{r}
+bike_share_rides %>%
+  # Group by ride_id and date
+  group_by(ride_id, date) %>%
+  # Add duration_min_avg column
+  mutate(duration_min_avg = mean(duration_mins)) %>%
+  # Remove duplicates based on ride_id and date, keep all cols
+  distinct(ride_id, date, .keep_all = TRUE) %>%
+  # Remove duration_min column
+  select(-duration_mins)
+```
+
+
+
+## Correcting inconsistency
+
+Now that you've identified that dest_size has whitespace inconsistencies and cleanliness has capitalization inconsistencies, you'll use the new tools at your disposal to fix the inconsistent values in sfo_survey instead of removing the data points entirely, which could add bias to your dataset if more than 5% of the data points need to be dropped.
+
+dplyr and stringr are loaded and sfo_survey is available.
+
+
+```{r}
+
+sfo_survey <- readRDS("sfo_survey_ch2_1.rds")
+# Add new columns to sfo_survey
+sfo_survey <- sfo_survey %>%
+  # dest_size_trimmed: dest_size without whitespace
+  mutate(dest_size_trimmed = str_trim(dest_size),
+         # cleanliness_lower: cleanliness converted to lowercase
+         cleanliness_lower = str_to_lower(cleanliness))
+
+# Count values of dest_size_trimmed
+sfo_survey %>%
+  count(dest_size_trimmed)
+
+# Count values of cleanliness_lower
+sfo_survey %>%
+  count(cleanliness_lower)
+```
+
+
+## Collapsing categories
+
+One of the tablets that participants filled out the sfo_survey on was not properly configured, allowing the response for dest_region to be free text instead of a dropdown menu. This resulted in some inconsistencies in the dest_region variable that you'll need to correct in this exercise to ensure that the numbers you report to your boss are as accurate as possible.
+
+dplyr and forcats are loaded and sfo_survey is available.
+
+
+```{r}
+# Count categories of dest_region
+sfo_survey %>%
+  count(dest_region)
+```
+
+
+
+```{r}
+
+# Categories to map to Europe
+europe_categories <- c("EU", "Europ", "eur")
+
+# Add a new col dest_region_collapsed
+sfo_survey %>%
+  # Map all categories in europe_categories to Europe
+  mutate(dest_region_collapsed = fct_collapse(dest_region, 
+                                     Europe = europe_categories)) %>%
+  # Count categories of dest_region_collapsed
+  count(dest_region_collapsed)
+```
+
+
+
+## Detecting inconsistent text data
+
+You've recently received some news that the customer support team wants to ask the SFO survey participants some follow-up questions. However, the auto-dialer that the call center uses isn't able to parse all of the phone numbers since they're all in different formats. After some investigation, you found that some phone numbers are written with hyphens (-) and some are written with parentheses ((,)). In this exercise, you'll figure out which phone numbers have these issues so that you know which ones need fixing.
+
+dplyr and stringr are loaded, and sfo_survey is available.
+
+
+```{r}
+# Filter for rows with "-" in the phone column
+sfo_survey %>%
+  filter(str_detect(sfo_survey$phone, "-"))
+```
+
+
+
+```{r}
+# Filter for rows with "(" or ")" in the phone column
+sfo_survey %>%
+  filter(str_detect(sfo_survey$phone, fixed("(")) | str_detect(sfo_survey$phone, fixed(")")))
+```
+
+
+## Replacing and removing
+
+In the last exercise, you saw that the phone column of sfo_data is plagued with unnecessary parentheses and hyphens. The customer support team has requested that all phone numbers be in the format "123 456 7890". In this exercise, you'll use your new stringr skills to fulfill this request.
+
+dplyr and stringr are loaded and sfo_survey is available.
+
+
+```{r}
+# Remove parentheses from phone column
+phone_no_parens <- sfo_survey$phone %>%
+  # Remove "("s
+  str_remove_all(fixed("(")) %>%
+  # Remove ")"s
+  str_remove_all(fixed(")"))
+
+# Add phone_no_parens as column
+sfo_survey %>%
+  mutate(phone_no_parens = phone_no_parens,
+  # Replace all hyphens in phone_no_parens with spaces
+         phone_clean = str_replace_all(phone_no_parens, "-",""))
+```
+
+
+## Invalid phone numbers
+
+The customer support team is grateful for your work so far, but during their first day of calling participants, they ran into some phone numbers that were invalid. In this exercise, you'll remove any rows with invalid phone numbers so that these faulty numbers don't keep slowing the team down.
+
+dplyr and stringr are loaded and sfo_survey is available.
+
+
+```{r}
+# Check out the invalid numbers
+sfo_survey %>%
+  filter(str_length(phone)!= 12)
+
+# Remove rows with invalid numbers
+sfo_survey %>%
+  filter(str_length(phone)==12)
+```
+
+
+## Date uniformity
+
+In this chapter, you work at an asset management company and you'll be working with the accounts dataset, which contains information about each customer, the amount in their account, and the date their account was opened. Your boss has asked you to calculate some summary statistics about the average value of each account and whether the age of the account is associated with a higher or lower account value. Before you can do this, you need to make sure that the accounts dataset you've been given doesn't contain any uniformity problems. In this exercise, you'll investigate the date_opened column and clean it up so that all the dates are in the same format.
+
+dplyr and lubridate are loaded and accounts is available.
+
+```{r}
+# Check out the accounts data frame
+
+accounts <- readRDS("ch3_1_accounts.rds")
+str(accounts)
+glimpse(accounts)
+head(accounts)
+```
+
+
+```{r}
+# Check out the accounts data frame
+head(accounts)
+
+# Define the date formats
+formats <- c("%Y-%m-%d", "%B %d, %Y")
+
+# Convert dates to the same format
+accounts %>%
+  mutate(date_opened_clean = parse_date_time(accounts$date_opened,
+                                            orders= formats))
+```
+
+
+
+## Currency uniformity
+
+Now that your dates are in order, you'll need to correct any unit differences. When you first plot the data, you'll notice that there's a group of very high values, and a group of relatively lower values. The bank has two different offices - one in New York, and one in Tokyo, so you suspect that the accounts managed by the Tokyo office are in Japanese yen instead of U.S. dollars. Luckily, you have a data frame called account_offices that indicates which office manages each customer's account, so you can use this information to figure out which totals need to be converted from yen to dollars.
+
+The formula to convert yen to dollars is USD = JPY / 104.
+
+dplyr and ggplot2 are loaded and the accounts and account_offices data frames are available.
+
+
+
+```{r}
+# Scatter plot of opening date and total amount
+accounts %>%
+  ggplot(aes(x = date_opened, y = total)) +
+  geom_point()
+
+```
+
+## Currency uniformity
+
+Now that your dates are in order, you'll need to correct any unit differences. When you first plot the data, you'll notice that there's a group of very high values, and a group of relatively lower values. The bank has two different offices - one in New York, and one in Tokyo, so you suspect that the accounts managed by the Tokyo office are in Japanese yen instead of U.S. dollars. Luckily, you have a data frame called account_offices that indicates which office manages each customer's account, so you can use this information to figure out which totals need to be converted from yen to dollars.
+
+The formula to convert yen to dollars is USD = JPY / 104.
+
+dplyr and ggplot2 are loaded and the accounts and account_offices data frames are available.
+
+
+```{r}
+# Scatter plot of opening date and total amount
+accounts %>%
+  ggplot(aes(x = date_opened, y = total)) +
+  geom_point()
+
+# Left join accounts to account_offices by id
+accounts %>%
+  left_join(account_offices, by = "id") %>%
+  # Convert totals from the Tokyo office to USD
+  mutate(total_usd = ifelse(office == "Tokyo", total / 104, total)) %>%
+  # Scatter plot of opening date vs total_usd
+  ggplot(aes(x = date_opened, y = total_usd)) +
+    geom_point()
+```
+
+## Validating totals
+
+In this lesson, you'll continue to work with the accounts data frame, but this time, you have a bit more information about each account. There are three different funds that account holders can store their money in. In this exercise, you'll validate whether the total amount in each account is equal to the sum of the amount in fund_A, fund_B, and fund_C. If there are any accounts that don't match up, you can look into them further to see what went wrong in the bookkeeping that led to inconsistencies.
+
+dplyr is loaded and accounts is available.
+
+
+
+```{r}
+# Find invalid totals
+accounts %>%
+  # theoretical_total: sum of the three funds
+  mutate(theoretical_total = fund_A + fund_B + fund_C) %>%
+  # Find accounts where total doesn't match theoretical_total
+  filter ( theoretical_total != total)
+```
+
+
+## Validating age
+
+Now that you found some inconsistencies in the total amounts, you're suspicious that there may also be inconsistencies in the acct_agecolumn, and you want to see if these inconsistencies are related. Using the skills you learned from the video exercise, you'll need to validate the age of each account and see if rows with inconsistent acct_ages are the same ones that had inconsistent totals
+
+dplyr and lubridate are loaded, and accounts is available.
+
+
+```{r}
+# Find invalid acct_age
+accounts %>%
+  # theoretical_age: age of acct based on date_opened
+  mutate(theoretical_age = floor(as.numeric(date_opened %--% today(), "years"))) %>%
+  # Filter for rows where acct_age is different from theoretical_age
+  filter(acct_age != theoretical_age)
+```
+
+
+## Visualizing missing data
+
+Dealing with missing data is one of the most common tasks in data science. There are a variety of types of missingness, as well as a variety of types of solutions to missing data.
+
+You just received a new version of the accounts data frame containing data on the amount held and amount invested for new and existing customers. However, there are rows with missing inv_amount values.
+
+You know for a fact that most customers below 25 do not have investment accounts yet, and suspect it could be driving the missingness. The dplyr and visdat packages have been loaded and accounts is available.
+
+
+```{r}
+library(visdat)
+
+account %>%
+  vis_miss()
+
+```
+
+```{r}
+# Visualize the missing values by column
+vis_miss(accounts)
+
+accounts %>%
+  # missing_inv: Is inv_amount missing?
+  mutate(missing_inv = is.na(inv_amount)) %>%
+  # Group by missing_inv
+  group_by(missing_inv) %>%
+  # Calculate mean age for each missing_inv group
+  summarize(avg_age = mean(age,na.rm = T))
+
+```
+
+```{r}
+# Visualize the missing values by column
+vis_miss(accounts)
+
+accounts %>%
+  # missing_inv: Is inv_amount missing?
+  mutate(missing_inv = is.na(inv_amount)) %>%
+  # Group by missing_inv
+  group_by(missing_inv) %>%
+  # Calculate mean age for each missing_inv group
+  summarize(avg_age = mean(age))
+
+# Sort by age and visualize missing vals
+accounts %>%
+  arrange(age) %>%
+  vis_miss()
+```
+
+
+
+## Treating missing data
+
+In this exercise, you're working with another version of the accounts data that contains missing values for both the cust_id and acct_amount columns.
+
+You want to figure out how many unique customers the bank has, as well as the average amount held by customers. You know that rows with missing cust_id don't really help you, and that on average, the acct_amount is usually 5 times the amount of inv_amount.
+
+In this exercise, you will drop rows of accounts with missing cust_ids, and impute missing values of inv_amount with some domain knowledge. dplyr and assertive are loaded and accounts is available.
+
+```{r}
+# Create accounts_clean
+accounts_clean <- accounts %>%
+  # Filter to remove rows with missing cust_id
+  filter(is.na(cust_id) == FALSE)
+
+accounts_clean
+```
+
+
+
+```{r}
+# Create accounts_clean
+accounts_clean <- accounts %>%
+  # Filter to remove rows with missing cust_id
+filter( is.na(cust_id) == FALSE) %>%
+  # Add new col acct_amount_filled with replaced NAs
+  mutate(acct_amount_filled = ifelse(is.na(acct_amount), inv_amount * 5, acct_amount))
+
+accounts_clean
+```
+
+
+
+```{r}
+# Create accounts_clean
+accounts_clean <- accounts %>%
+  # Filter to remove rows with missing cust_id
+  filter(!is.na(cust_id)) %>%
+  # Add new col acct_amount_filled with replaced NAs
+  mutate(acct_amount_filled = ifelse(is.na(acct_amount), inv_amount * 5, acct_amount))
+
+# Assert that cust_id has no missing vals
+assert_all_are_not_na(accounts_clean$cust_id)
+
+# Assert that acct_amount_filled has no missing vals
+assert_all_are_not_na(accounts_clean$acct_amount_filled)
+```
+
+
+
+## Calculating distance
+
+In the video exercise, you saw how to use Damerau-Levenshtein distance to identify how similar two strings are. As a reminder, Damerau-Levenshtein distance is the minimum number of steps needed to get from String A to String B, using these operations:
+
+    Insertion of a new character.
+    Deletion of an existing character.
+    Substitution of an existing character.
+    Transposition of two existing consecutive characters.
+
+What is the Damerau-Levenshtein distance between the words "puffin" and "muffins" and which operation(s) gets you there?
+
+
+## Small distance, small difference
+
+In the video exercise, you learned that there are multiple ways to calculate how similar or different two strings are. Now you'll practice using the stringdist package to compute string distances using various methods. It's important to be familiar with different methods, as some methods work better on certain datasets, while others work better on other datasets.
+
+The stringdist package has been loaded for you.
+
+
+```{r}
+library(stringdist)
+```
+```{r}
+# Calculate Damerau-Levenshtein distance
+stringdist("las angelos", "los angeles", method = "dl")
+```
+
+
+```{r}
+# Calculate LCS distance
+stringdist("las angelos", "los angeles", method = "lcs")
+```
+
+
+```{r}
+stringdist("las angeles", "los angeles", method = "jaccard")
+```
+
+Question
+
+Why is the LCS distance higher than the Damerau-Levenshtein distance between "las angelos" and "los angeles"?
+
+*LCS distance only uses insertion and deletion, so it takes more operations to change a string to another.*
+
+
+
+## Fixing typos with string distance
+
+In this chapter, one of the datasets you'll be working with, zagat, is a set of restaurants in New York, Los Angeles, Atlanta, San Francisco, and Las Vegas. The data is from Zagat, a company that collects restaurant reviews, and includes the restaurant names, addresses, phone numbers, as well as other restaurant information.
+
+The city column contains the name of the city that the restaurant is located in. However, there are a number of typos throughout the column. Your task is to map each city to one of the five correctly-spelled cities contained in the cities data frame.
+
+dplyr and fuzzyjoin are loaded, and zagat and cities are available.
+
+
+
+```{r}
+zagat <- readRDS("zagat.rds")
+```
+
+```{r}
+# Count the number of each city variation
+zagat %>%
+  count(city)
+
+# Join zagat and cities and look at results
+zagat %>%
+  # Left join based on stringdist using city and city_actual cols
+  stringdist_left_join(cities, by = c("city" = "city_actual")) %>%
+  # Select the name, city, and city_actual cols
+  select(name,city, city_actual)
+```
+
+## Pair blocking
+
+Zagat and Fodor's are both companies that gather restaurant reviews. The zagat and fodors datasets both contain information about various restaurants, including addresses, phone numbers, and cuisine types. Some restaurants appear in both datasets, but don't necessarily have the same exact name or phone number written down. In this chapter, you'll work towards figuring out which restaurants appear in both datasets.
+
+The first step towards this goal is to generate pairs of records so that you can compare them. In this exercise, you'll first generate all possible pairs, and then use your newly-cleaned city column as a blocking variable.
+
+zagat and fodors are available.
+
+
+```{r}
+fodors <- readRDS("fodors.rds")
+```
+
+```{r}
+# Load reclin
+library(reclin)
+
+# Generate all possible pairs
+pair_blocking(zagat,fodors)
+```
+
+```{r}
+# Load reclin
+library(reclin)
+
+# Generate pairs with same city
+pair_blocking(zagat, fodors, blocking_var= "city")
+```
+
+## Comparing pairs
+
+Now that you've generated the pairs of restaurants, it's time to compare them. You can easily customize how you perform your comparisons using the by and default_comparator arguments. There's no right answer as to what each should be set to, so in this exercise, you'll try a couple options out.
+
+dplyr and reclin are loaded and zagat and fodors are available.
+
+
+```{r}
+# Generate pairs
+pair_blocking(zagat, fodors, blocking_var = "city") %>%
+  # Compare pairs by name using lcs()
+  compare_pairs(by = 'name',
+      default_comparator = lcs())
+```
+
+```{r}
+# Generate pairs
+pair_blocking(zagat, fodors, blocking_var = "city") %>%
+  # Compare pairs by name, phone, addr
+  compare_pairs(by = c("name","phone","addr"),
+      default_comparator= jaro_winkler())
+```
+
+## Score then select or select then score?
+
+The order:
+
+- Clean datasets
+- Generate pairs of records
+- Compare separate columns of each pair
+- Score pairs using summing or probability
+- Select pairs that are matches based on their score
+- Link the datasets together
+
+
+## Putting it together
+
+During this chapter, you've cleaned up the city column of zagat using string similarity, as well as generated and compared pairs of restaurants from zagat and fodors. The end is near - all that's left to do is score and select pairs and link the data together, and you'll be able to begin your analysis in no time!
+
+reclin and dplyr are loaded and zagat and fodors are available
+
+```{r}
+# Create pairs
+pair_blocking(zagat, fodors, blocking_var = "city") %>%
+  # Compare pairs
+  compare_pairs(by = "name", default_comparator = jaro_winkler()) %>%
+  # Score pairs
+  score_problink() %>%
+  # Select pairs
+  select_n_to_m() %>%
+  # Link data 
+  link()
+```
+
+
+# Case Study: Exploratory Data Analysis in R
+
+## Filtering rows
+
+The vote column in the dataset has a number that represents that country's vote:
+
+    1 = Yes
+    2 = Abstain
+    3 = No
+    8 = Not present
+    9 = Not a member
+
+One step of data cleaning is removing observations (rows) that you're not interested in. In this case, you want to remove "Not present" and "Not a member".
+
+```{r echo=TRUE}
+
+votes <- read_rds("votes.rds")
+
+votes %>%
+  filter(vote <= 3)
+```
+
+
+```{r}
+# Add another %>% step to add a year column
+votes %>%
+  filter(vote <= 3) %>%
+  mutate(year = session + 1945)
+
+```
+
+## Adding a country column
+
+The country codes in the ccode column are what's called Correlates of War codes. This isn't ideal for an analysis, since you'd like to work with recognizable country names.
+
+You can use the countrycode package to translate. For example:
+
+ Translate the country code 2
+> countrycode(2, "cown", "country.name")
+[1] "United States"
+
+ Translate multiple country codes
+> countrycode(c(2, 20, 40), "cown", "country.name")
+[1] "United States" "Canada"        "Cuba"
+
+```{r}
+# Load the countrycode package
+library(countrycode)
+
+# Convert country code 100
+countrycode(100,'cown', 'country.name')
+
+# Add a country column within the mutate: votes_processed
+votes_processed <- votes %>%
+  filter(vote <= 3) %>%
+  mutate(year = session + 1945,
+        country = countrycode(ccode,"cown",'country.name'))
+```
+
+
+## Summarizing the full dataset
+
+In this analysis, you're going to focus on "% of votes that are yes" as a metric for the "agreeableness" of countries.
+
+You'll start by finding this summary for the entire dataset: the fraction of all votes in their history that were "yes". Note that within your call to summarize(), you can use n() to find the total number of votes and mean(vote == 1) to find the fraction of "yes" votes.
+
+
+```{r}
+votes_processed %>%
+  summarize(
+    total = n(),
+    percent_yes = mean(vote==1)
+  )
+```
+
+## Summarizing by year
+
+The summarize() function is especially useful because it can be used within groups.
+
+For example, you might like to know how much the average "agreeableness" of countries changed from year to year. To examine this, you can use group_by() to perform your summary not for the entire dataset, but within each year.
+
+
+```{r}
+# Change this code to summarize by year
+votes_processed %>%
+  group_by(year) %>%
+  summarize(total = n(),
+            percent_yes = mean(vote == 1))
+```
+
+## Summarizing by country
+
+In the last exercise, you performed a summary of the votes within each year. You could instead summarize() within each country, which would let you compare voting patterns between countries.
+
+```{r}
+# Summarize by country: by_country
+by_country <- votes_processed %>%
+  group_by(country) %>%
+  summarize(total = n(),
+            percent_yes = mean(vote == 1))
+```
+
+## Sorting by percentage of "yes" votes
+
+Now that you've summarized the dataset by country, you can start examining it and answering interesting questions.
+
+For example, you might be especially interested in the countries that voted "yes" least often, or the ones that voted "yes" most often.
+
+```{r}
+# You have the votes summarized by country
+by_country <- votes_processed %>%
+  group_by(country) %>%
+  summarize(total = n(),
+            percent_yes = mean(vote == 1))
+
+# Print the by_country dataset
+print(by_country)
+
+# Sort in ascending order of percent_yes
+by_country %>%
+arrange(percent_yes)
+
+# Now sort in descending order
+
+by_country %>%
+arrange(desc(percent_yes))
+```
+
+## Filtering summarized output
+
+In the last exercise, you may have noticed that the country that voted least frequently, Zanzibar, had only 2 votes in the entire dataset. You certainly can't make any substantial conclusions based on that data!
+
+Typically in a progressive analysis, when you find that a few of your observations have very little data while others have plenty, you set some threshold to filter them out.
+
+```{r}
+# Filter out countries with fewer than 100 votes
+by_country %>%
+  arrange(desc(percent_yes)) %>%
+  filter( total >=100 )
+  
+```
+
+## Plotting a line over time
+
+In the last chapter, you learned how to summarize() the votes dataset by year, particularly the percentage of votes in each year that were "yes".
+
+You'll now use the ggplot2 package to turn your results into a visualization of the percentage of "yes" votes over time.
+
+
+```{r}
+# Define by_year
+by_year <- votes_processed %>%
+  group_by(year) %>%
+  summarize(total = n(),
+            percent_yes = mean(vote == 1))
+
+# Load the ggplot2 package
+library(ggplot2)
+
+# Create line plot
+ggplot(by_year, aes(x= year, y= percent_yes)) +
+  geom_line()
+```
+
+
+## Other ggplot2 layers
+
+A line plot is one way to display this data. You could also choose to display it as a scatter plot, with each year represented as a single point. This requires changing the layer (i.e. geom_line() to geom_point()).
+
+You can also add additional layers to your graph, such as a smoothing curve with geom_smooth().
+
+
+```{r}
+# Change to scatter plot and add smoothing curve
+ggplot(by_year, aes(year, percent_yes)) +
+  geom_point() +
+  geom_smooth()
+  
+```
+
+## Summarizing by year and country
+
+You're more interested in trends of voting within specific countries than you are in the overall trend. So instead of summarizing just by year, summarize by both year and country, constructing a dataset that shows what fraction of the time each country votes "yes" in each year.
+
+
+```{r}
+# Group by year and country: by_year_country
+by_year_country <- votes_processed %>%
+  group_by(year, country) %>%
+  summarize(total = n(),
+            percent_yes = mean(vote == 1))
+```
+
+## Plotting just the UK over time
+
+Now that you have the percentage of time that each country voted "yes" within each year, you can plot the trend for a particular country. In this case, you'll look at the trend for just the United Kingdom.
+
+This will involve using filter() on your data before giving it to ggplot2.
+
+
+```{r}
+# Create a filtered version: UK_by_year
+UK_by_year <- by_year_country %>%
+  filter( country == "United Kingdom")
+
+# Line plot of percent_yes over time for UK only
+ggplot(UK_by_year, aes(year, percent_yes)) +
+  geom_line()
+```
+
+## Plotting multiple countries
+
+Plotting just one country at a time is interesting, but you really want to compare trends between countries. For example, suppose you want to compare voting trends for the United States, the UK, France, and India.
+
+You'll have to filter to include all four of these countries and use another aesthetic (not just x- and y-axes) to distinguish the countries on the resulting visualization. Instead, you'll use the color aesthetic to represent different countries.
+
+
+```{r}
+# Vector of four countries to examine
+countries <- c("United States", "United Kingdom",
+               "France", "India")
+
+# Filter by_year_country: filtered_4_countries
+filtered_4_countries <- by_year_country %>%
+  filter(country %in% countries)
+
+# Line plot of % yes in four countries
+ggplot(filtered_4_countries, aes(year, percent_yes, color = country)) +
+  geom_line()
+```
+
+## Faceting the time series
+
+Now you'll take a look at six countries. While in the previous exercise you used color to represent distinct countries, this gets a little too crowded with six.
+
+Instead, you will facet, giving each country its own sub-plot. To do so, you add a facet_wrap() step after all of your layers.
+
+
+```{r}
+# Vector of six countries to examine
+  countries <- c("United States", "United Kingdom",
+                 "France", "Japan", "Brazil", "India")
+  
+  # Filtered by_year_country: filtered_6_countries
+  filtered_6_countries <- by_year_country %>%
+    filter(country %in% countries)
+  
+  # Line plot of % yes over time faceted by country
+  ggplot(filtered_6_countries, aes(year, percent_yes)) +
+    geom_line() +
+    facet_wrap(~country)
+```
+
+## Faceting with free y-axis
+
+In the previous plot, all six graphs had the same axis limits. This made the changes over time hard to examine for plots with relatively little change.
+
+Instead, you may want to let the plot choose a different y-axis for each facet.
+
+```{r}
+  # Vector of six countries to examine
+countries <- c("United States", "United Kingdom",
+               "France", "Japan", "Brazil", "India")
+
+# Filtered by_year_country: filtered_6_countries
+filtered_6_countries <- by_year_country %>%
+  filter(country %in% countries)
+
+# Line plot of % yes over time faceted by country
+ggplot(filtered_6_countries, aes(year, percent_yes)) +
+  geom_line() +
+  facet_wrap(~ country, scales = "free_y")
+```
+
+```{r}
+# Add three more countries to this list
+countries <- c("United States", "United Kingdom",
+               "France", "Japan", "Brazil", "India",
+               "Egypt","Dominican Republic","Denmark")
+
+# Filtered by_year_country: filtered_countries
+filtered_countries <- by_year_country %>%
+  filter(country %in% countries)
+
+# Line plot of % yes over time faceted by country
+ggplot(filtered_countries, aes(year, percent_yes)) +
+  geom_line() +
+  facet_wrap(~ country, scales = "free_y")
+```
+
+## Linear regression on the United States
+
+A linear regression is a model that lets us examine how one variable changes with respect to another by fitting a best fit line. It is done with the lm() function in R.
+
+Here, you'll fit a linear regression to just the percentage of "yes" votes from the United States.
+
+
+```{r}
+# Percentage of yes votes from the US by year: US_by_year
+US_by_year <- by_year_country %>%
+  filter(country == "United States")
+
+# Print the US_by_year data
+print(US_by_year)
+
+# Perform a linear regression of percent_yes by year: US_fit
+US_fit <- lm(data= US_by_year, percent_yes ~ year)
+
+# Perform summary() on the US_fit object
+summary(US_fit)
+```
+
+## Tidying a linear regression model
+
+In the last section, you fit a linear model. Now, you'll use the tidy() function in the broom package to turn that model into a tidy data frame.
+
+
+```{r}
+# Load the broom package
+library(broom)
+
+# Call the tidy() function on the US_fit object
+tidy(US_fit)
+```
+
+
+Combining models for multiple countries
+
+One important advantage of changing models to tidied data frames is that they can be combined.
+
+In an earlier section, you fit a linear model to the percentage of "yes" votes for each year in the United States. Now you'll fit the same model for the United Kingdom and combine the results from both countries.
+
+```{r}
+# Linear regression of percent_yes by year for US
+US_by_year <- by_year_country %>%
+  filter(country == "United States")
+US_fit <- lm(percent_yes ~ year, US_by_year)
+
+# Fit model for the United Kingdom
+UK_by_year <- by_year_country %>%
+  filter(country == "United Kingdom")
+UK_fit <- lm(percent_yes ~ year, UK_by_year)
+
+# Create US_tidied and UK_tidied
+US_tidied <- broom::tidy(US_fit)
+UK_tidied <- broom::tidy(UK_fit)
+# Combine the two tidied models
+bind_rows(US_tidied,UK_tidied)
+```
+
+## Nesting a data frame
+
+Right now, the by_year_country data frame has one row per country-vote pair. So that you can model each country individually, you're going to "nest" all columns besides country, which will result in a data frame with one row per country. The data for each individual country will then be stored in a list column called data.
+
+```{r}
+
+# Nest all columns besides country
+by_year_country %>%
+tidyr::nest(-country)
+
+```
+
+## List columns
+
+This "nested" data has an interesting structure. The second column, data, is a list, a type of R object that hasn't yet come up in this course that allows complicated objects to be stored within each row. This is because each item of the data column is itself a data frame.
+
+# A tibble: 200 × 2
+                           country              data
+                             <chr>            <list>
+1                      Afghanistan <tibble [34 × 3]>
+2                        Argentina <tibble [34 × 3]>
+3                        Australia <tibble [34 × 3]>
+4                          Belarus <tibble [34 × 3]>
+5                          Belgium <tibble [34 × 3]>
+6  Bolivia, Plurinational State of <tibble [34 × 3]>
+7                           Brazil <tibble [34 × 3]>
+8                           Canada <tibble [34 × 3]>
+9                            Chile <tibble [34 × 3]>
+10                        Colombia <tibble [34 × 3]>
+
+You can use nested$data to access this list column and double brackets to access a particular element. For example, nested$data[[1]] would give you the data frame with Afghanistan's voting history (the percent_yes per year), since Afghanistan is the first row of the table.
+
+```{r}
+# All countries are nested besides country
+nested <- by_year_country %>%
+  tidyr::nest(-country)
+
+# Print the nested data for Brazil
+nested$data[[7]]
+```
+
+## Unnesting
+
+The opposite of the nest() operation is the unnest() operation. This takes each of the data frames in the list column and brings those rows back to the main data frame.
+
+In this exercise, you are just undoing the nest() operation. In the next section, you'll learn how to fit a model in between these nesting and unnesting steps that makes this process useful.
+
+
+```{r}
+# All countries are nested besides country
+nested <- by_year_country %>%
+  nest(-country)
+
+# Unnest the data column to return it to its original form
+unnest(nested)
+```
+
